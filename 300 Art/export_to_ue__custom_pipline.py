@@ -148,7 +148,7 @@ def export_armature_with_its_geometry_to_ue(rig):
 
     # Send to Unreal Engine all things from the "Export" collection
     update_view_print(f"Sending to Unreal started")
-    # bpy.ops.wm.send2ue()
+    bpy.ops.wm.send2ue()
     update_view_print(f"Sending to Unreal finished")
 
     # delete the "Export" collection
@@ -185,7 +185,7 @@ def main():
 
     update_view_print(f"All rigs exported")
     update_view_print(f"SCRIPT FINISHED")
-    
+
     # Revert all changes to the Blender file
     if IS_REVERT_CHANGES:
         bpy.ops.wm.revert_mainfile()
