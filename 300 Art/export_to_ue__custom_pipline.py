@@ -52,7 +52,7 @@ def update_view_print(message):
     log_to_file(message)
     
 # Select the object. I SAD: SELECT THE OBJECT
-def select_object_by_force(obj):
+def force_select_object(obj):
     if obj.name in bpy.context.view_layer.objects:
         obj.select_set(True)
         bpy.context.view_layer.objects.active = obj
@@ -76,6 +76,8 @@ def export_armature_with_its_geometry_to_ue(rig):
     update_view_print(f"Hierarchy of {rig.name} moved to {temporal_export_collection.name}")
 
 
+    meshes = []
+    update_view_print(f"Collecting meshes of {rig.name}:")
     for obj in temporal_export_collection.all_objects:
         # only for geometry
         if not (
@@ -87,8 +89,12 @@ def export_armature_with_its_geometry_to_ue(rig):
             update_view_print(f"Skipping {obj.name if obj else 'object'} because it is not a mesh")
             continue
 
+        meshes.append(obj)
+        update_view_print(f" {obj.name}")
 
-        select_object_by_force(obj)
+
+    for obj in meshes:
+        force_select_object(obj)
 
         update_view_print(f"Selected {obj.name}")
 
@@ -120,6 +126,7 @@ def export_armature_with_its_geometry_to_ue(rig):
     update_view_print(f"Exported rig and its childs {rig.name} finished")
 
     pass
+
 
 
 
