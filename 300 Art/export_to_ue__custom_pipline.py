@@ -19,6 +19,7 @@ LOG_FILE_NAME = f"{THIS_FILE_NAME}.log"
 # normals
 DONT_FIX_NORMALS = "dont_fix_normals"
 # create a bone for this object that will be used like its transform origin
+# currently depends on having a parent armature and an armature modifier and having no vertex groups
 CREATE_MICRO_BONE = "create_micro_bone" # optional
 MICRO_BONE_NAME = "micro_bone_name" # optional name of the bone
 MICRO_BONE_PARENT = "micro_bone_parent" # optional name of the bone that will be parent of this bone to
@@ -54,6 +55,12 @@ def map_action(iterator, func):
 def map_iter(iterator, func):
     for item in iterator:
         yield func(item)
+
+def map_iter_pipe(iterator, *funcs):
+    for item in iterator:
+        for func in funcs:
+            item = func(item)
+        yield item
 
 def iter_hierarchy_inclusive(obj):
     yield obj
@@ -152,16 +159,17 @@ def fill_object_with_vertex_weight(obj, bone_name, weight=1):
     vertex_indices = [v.index for v in obj.data.vertices]
     vertex_group.add(vertex_indices, weight, 'REPLACE')
 
+def has_armature_modifier(obj):
+    for mod in obj.modifiers:
+        if mod.type == 'ARMATURE':
+            return True
+    return False
+
 def create_micro_bone_pass(obj, rig):
-    if (
-        # implicitly wants to have a micro bone
-        obj.parent.type == "ARMATURE" # have parent armature
-        and obj.modifiers.contains("Armature") # have armature modifier
-        # explicitly wants to have a micro bone
-        or hasattr(obj, CREATE_MICRO_BONE) # condition error here btw)
-        and obj[CREATE_MICRO_BONE] is True # have explicit setting
-    ):
-        return
+    # wants_implicitly = obj.parent and obj.parent.type == "ARMATURE" and has_armature_modifier(obj) and len(obj.vertex_groups) == 0
+    # wants_explicitly = hasattr(obj, CREATE_MICRO_BONE) and obj[CREATE_MICRO_BONE]
+    # if wants_implicitly or wants_explicitly:
+    #     return
 
     parent_bone = None
     if MICRO_BONE_PARENT in obj.keys():
@@ -172,8 +180,10 @@ def create_micro_bone_pass(obj, rig):
         name = obj[MICRO_BONE_NAME]
 
     bone = add_bone_to_armature(rig, name, obj.location, obj.location, parent_bone)
+    update_view_print(f"Created micro bone {bone.name} for {obj.name}")
 
     fill_object_with_vertex_weight(obj, bone.name, 1)
+    update_view_print(f"Filled vertex weight for {obj.name}")
 
     pass
 
@@ -191,7 +201,13 @@ def apply_render_geometry_modifiers(obj):
             else:
                 print(f"Skipping modifier '{modifier.name}' (cz not enabled for render)")
 
+def do(obj, fn):
+    fn()
+    return obj
 
+def btw(fn):
+    fn()
+    return lambda obj: obj
 
 def export_armature_with_its_geometry_to_ue(rig):
     update_view_print(f"Exporting for {rig.name} started")
@@ -223,6 +239,24 @@ def export_armature_with_its_geometry_to_ue(rig):
         update_view_print(f"{tab()}{obj.name}")
 
 
+
+    # map_iter_pipe(
+    #     meshes,
+    #     lambda x: (update_view_print(f"Selected {x.name}"), x),
+    #     # Make single user and apply visual transform
+    #     lambda x: (bpy.ops.object.make_single_user(object=True, obdata=True), x),
+    #     lambda x: (bpy.ops.object.transform_apply(location=True, rotation=True, scale=True), x),
+    #     # lambda x: (x.data.name = f"{x.name}__unique_mesh", x),
+    #     apply_render_geometry_modifiers_pass,
+    #     lambda x: (bpy.ops.object.visual_transform_apply(), x),
+    #     fix_object_normal_pass,
+    #     btw(lambda x: fill_object_with_vertex_weight(x, "__micro_bone", 1)),
+    #     lambda x: create_micro_bone_pass(x, rig),
+    #     lambda x: (x.select_set(False), x)
+    # )
+
+
+
     for obj in meshes:
         force_select_object(obj)
 
@@ -239,7 +273,9 @@ def export_armature_with_its_geometry_to_ue(rig):
         bpy.ops.object.make_single_user(object=True, obdata=True)
         bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 
-        apply_render_geometry_modifiers_pass(obj)
+
+        # apply_render_geometry_modifiers_pass(obj)
+
 
         bpy.ops.object.visual_transform_apply()
         update_view_print(f"{tab()}Made single user and applied visual transform to {obj.name}")
@@ -247,9 +283,8 @@ def export_armature_with_its_geometry_to_ue(rig):
 
         fix_object_normal_pass(obj)
 
-        create_micro_bone_pass(obj, rig)
+        # create_micro_bone_pass(obj, rig)
 
-        
         
         obj.data.name = f"{obj.name}__unique_mesh"
         update_view_print(f"{tab()}Renamed object data to {obj.data.name}")
