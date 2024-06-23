@@ -5,14 +5,25 @@ import traceback
 
 
 # constants ------------------------------------------------------------------
-DONT_FIX_NORMALS = "dont_fix_normals"
-IS_REVERT_CHANGES = True
+# main settings
+IS_REVERT_CHANGES = False
+IS_EXPORT_TO_UE = False
+# logging
 TAB_SIZE = 3
 THIS_FILE_NAME = "export_to_ue__custom_pipline.py"
-LOG_FILE_NAME = f"{THIS_FILE_NAME}.log"
+LOG_FILE_NAME = f"{THIS_FILE_NAME}.log" 
+
+
+
+# optional passes pr object settings ------------------------------------------------------------------
+# normals
+DONT_FIX_NORMALS = "dont_fix_normals"
+# create a bone for this object that will be used like its transform origin
+CREATE_MICRO_BONE = "create_micro_bone" # optional
+MICRO_BONE_NAME = "micro_bone_name" # optional name of the bone
+MICRO_BONE_PARENT = "micro_bone_parent" # optional name of the bone that will be parent of this bone to
+#
 IS_APPLY_RENDER_OR_VIEW_MODIFIERS = False
-
-
 
 
 # functions ------------------------------------------------------------------
@@ -81,6 +92,11 @@ def force_select_object(obj):
         bpy.context.view_layer.objects.active = obj
         obj.select_set(True)
 
+def fix_object_normal_pass(obj):
+    if DONT_FIX_NORMALS not in obj.keys() or obj[DONT_FIX_NORMALS] is False:
+        fix_object_normals(obj)
+        update_view_print(f"Normals fixed for {obj.name}")
+
 def fix_object_normals(obj):
     force_select_object(obj)
     bpy.ops.object.mode_set(mode='EDIT')
@@ -88,6 +104,15 @@ def fix_object_normals(obj):
     bpy.ops.mesh.normals_make_consistent(inside=False)
     bpy.ops.mesh.select_all(action='DESELECT')
     bpy.ops.object.mode_set(mode='OBJECT')
+
+
+
+def execute_pass_queue(obj, *fn):
+    for fn in fn:
+        fn(obj)
+
+
+
 
 # def temporal_select_object(obj, fn):
 #     old_active = bpy.context.view_layer.objects.active
@@ -100,12 +125,63 @@ def fix_object_normals(obj):
 #     for ob in old_selected:
 #         ob.select_set(True)
 
+def add_bone_to_armature(armature, bone_name="Bone.001", head=(0, 0, 0), tail=(0, 0, 1), parent_bone=None):
+    bpy.context.view_layer.objects.active = armature
+    bpy.ops.object.mode_set(mode='EDIT')
 
-def apply_render_modifiers(obj):
+    new_bone = armature.data.edit_bones.new(bone_name)
+    new_bone.head = head
+    new_bone.tail = tail
+
+    if parent_bone is not None:
+        new_bone.parent = parent_bone
+
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    return new_bone
+
+def fill_object_with_vertex_weight(obj, bone_name, weight=1):
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.mode_set(mode='OBJECT')
+    vertex_group = obj.vertex_groups.new(name=bone_name)
+    vertex_indices = [v.index for v in obj.data.vertices]
+    vertex_group.add(vertex_indices, weight, 'REPLACE')
+
+def create_micro_bone_pass(obj, rig):
+    if (
+        # implicitly wants to have a micro bone
+        obj.parent.type == "ARMATURE" # have parent armature
+        and obj.modifiers.contains("Armature") # have armature modifier
+        # explicitly wants to have a micro bone
+        or hasattr(obj, CREATE_MICRO_BONE) 
+        and obj[CREATE_MICRO_BONE] is True # have explicit setting
+    ):
+        return
+
+    parent_bone = None
+    if MICRO_BONE_PARENT in obj.keys():
+        parent_bone = rig.data.edit_bones[obj[MICRO_BONE_PARENT]]
+
+    name = f"{obj.name}__micro_bone"
+    if MICRO_BONE_NAME in obj.keys():
+        name = obj[MICRO_BONE_NAME]
+
+    new_bone = add_bone_to_armature(rig, name, obj.location, obj.location, parent_bone)
+
+    fill_object_with_vertex_weight(obj, new_bone.name, 1)
+
+    pass
+
+def apply_render_geometry_modifiers_pass(obj):
+    if IS_APPLY_RENDER_OR_VIEW_MODIFIERS:
+        apply_render_geometry_modifiers(obj)
+        update_view_print(f"{tab()}Applied render modifiers to {obj.name}")
+
+def apply_render_geometry_modifiers(obj):
     if obj.modifiers:
         for modifier in obj.modifiers:
             if modifier.show_render:
-                force_select_object(obj)
+                bpy.context.view_layer.objects.active = obj
                 bpy.ops.object.modifier_apply(modifier=modifier.name)
             else:
                 print(f"Skipping modifier '{modifier.name}' (cz not enabled for render)")
@@ -145,23 +221,28 @@ def export_armature_with_its_geometry_to_ue(rig):
     for obj in meshes:
         force_select_object(obj)
 
+        # execute_pass_queue(
+        #     obj, 
+        #     lambda o: fix_object_normal_pass(o),  
+        #     create_micro_bone_pass, 
+        #     apply_render_geometry_modifiers_pass
+        # )
+
         update_view_print(f"Selected {obj.name}")
 
         # Make single user and apply visual transform
         bpy.ops.object.make_single_user(object=True, obdata=True)
         bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 
-        if IS_APPLY_RENDER_OR_VIEW_MODIFIERS:
-            apply_render_modifiers(obj)
-            update_view_print(f"{tab()}Applied render modifiers to {obj.name}")
-            
+        apply_render_geometry_modifiers_pass(obj)
 
         bpy.ops.object.visual_transform_apply()
         update_view_print(f"{tab()}Made single user and applied visual transform to {obj.name}")
 
-        if DONT_FIX_NORMALS not in obj.keys() or obj[DONT_FIX_NORMALS] is False:
-            fix_object_normals(obj)
-            update_view_print(f"{tab()}Normals fixed for {obj.name}")
+
+        fix_object_normal_pass(obj)
+
+        create_micro_bone_pass(obj, rig)
 
         
         
@@ -176,9 +257,10 @@ def export_armature_with_its_geometry_to_ue(rig):
 
 
     # Send to Unreal Engine all things from the "Export" collection
-    update_view_print(f"Sending to Unreal started")
-    bpy.ops.wm.send2ue()
-    update_view_print(f"Sending to Unreal finished")
+    if IS_EXPORT_TO_UE:
+        update_view_print(f"Sending to Unreal started")
+        bpy.ops.wm.send2ue()
+        update_view_print(f"Sending to Unreal finished")
 
     # delete the "Export" collection
     bpy.data.collections.remove(temporal_export_collection)
