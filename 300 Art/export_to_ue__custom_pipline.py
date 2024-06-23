@@ -5,14 +5,13 @@ def deselect_everything():
     bpy.ops.object.select_all(action='DESELECT')
 
 
-def map(iterator, func):
+def map_action(iterator, func):
     for item in iterator:
         func(item)
 
-# def pipe(value, *funcs):
-#     for fn in funcs:
-#         value = fn(value)
-#     return value
+def map_iter(iterator, func):
+    for item in iterator:
+        yield func(item)
 
 def iter_hierarchy_inclusive(obj):
     yield obj
@@ -44,7 +43,7 @@ async def export_armature_with_its_geometry_to_ue(rig):
     update_view_print(f"Created collection {temporal_export_collection.name}")
 
     # add rig and its childs to the "Export" collection
-    map(
+    map_action(
         iter_hierarchy_inclusive(rig), 
         lambda obj: move_to_collection(obj, temporal_export_collection)
     )
@@ -69,13 +68,12 @@ async def export_armature_with_its_geometry_to_ue(rig):
         bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
         bpy.ops.object.visual_transform_apply()
 
-        # Deselect the object
         deselect_everything()
 
         update_view_print(f"Made unique user and applied visual transform to {obj.name}")
 
 
-    # Send to Unreal Engine
+    # Send to Unreal Engine all things from the "Export" collection
     bpy.ops.wm.send2ue()
 
     # delete the "Export" collection
@@ -92,6 +90,7 @@ async def main():
     # Save the current Blender file
     bpy.ops.wm.save_mainfile()
     update_view_print("Saved the current Blender file")
+    await asyncio.sleep(1)
 
     deselect_everything()
 
@@ -105,7 +104,7 @@ async def main():
         await asyncio.sleep(1)
         await export_armature_with_its_geometry_to_ue(rig)
 
-    update_view_print("All rigs exported")
+    update_view_print(f"All rigs exported. To be exact: {', '.join(map(str, map_iter(rigs_to_export, lambda x: x.name)))}")
 
     # Revert all changes to the Blender file
     bpy.ops.wm.revert_mainfile()
