@@ -10,6 +10,7 @@ IS_REVERT_CHANGES = True
 TAB_SIZE = 3
 THIS_FILE_NAME = "export_to_ue__custom_pipline.py"
 LOG_FILE_NAME = f"{THIS_FILE_NAME}.log"
+IS_APPLY_RENDER_OR_VIEW_MODIFIERS = True
 
 
 
@@ -81,13 +82,32 @@ def force_select_object(obj):
         obj.select_set(True)
 
 def fix_object_normals(obj):
-    force_select_object(obj)
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.mesh.select_all(action='SELECT')
     bpy.ops.mesh.normals_make_consistent(inside=False)
     bpy.ops.mesh.select_all(action='DESELECT')
     bpy.ops.object.mode_set(mode='OBJECT')
 
+def temporal_select_object(obj, fn):
+    old_active = bpy.context.view_layer.objects.active
+    old_selected = bpy.context.selected_objects
+
+    force_select_object(obj)
+    fn()
+
+    bpy.context.view_layer.objects.active = old_active
+    for ob in old_selected:
+        ob.select_set(True)
+
+
+def apply_render_modifiers(obj):
+    if obj.modifiers:
+        for modifier in obj.modifiers:
+            if modifier.show_render:
+                force_select_object(obj)
+                bpy.ops.object.modifier_apply(modifier=modifier.name)
+            else:
+                print(f"Skipping modifier '{modifier.name}' (cz not enabled for render)")
 
 
 
@@ -129,12 +149,26 @@ def export_armature_with_its_geometry_to_ue(rig):
         # Make single user and apply visual transform
         bpy.ops.object.make_single_user(object=True, obdata=True)
         bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+
+        if IS_APPLY_RENDER_OR_VIEW_MODIFIERS:
+            temporal_select_object(
+                obj, 
+                lambda: apply_render_modifiers(obj)
+            )
+            update_view_print(f"{tab()}Applied render modifiers to {obj.name}")
+            
+
         bpy.ops.object.visual_transform_apply()
         update_view_print(f"{tab()}Made single user and applied visual transform to {obj.name}")
 
         if DONT_FIX_NORMALS not in obj.keys() or obj[DONT_FIX_NORMALS] is False:
-            fix_object_normals(obj)
+            temporal_select_object(
+                obj, 
+                lambda: fix_object_normals(obj)
+            )
             update_view_print(f"{tab()}Normals fixed for {obj.name}")
+
+        
         
         obj.data.name = f"{obj.name}__unique_mesh"
         update_view_print(f"{tab()}Renamed object data to {obj.data.name}")
