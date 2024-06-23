@@ -125,6 +125,9 @@ def execute_pass_queue(obj, *fn):
 #     for ob in old_selected:
 #         ob.select_set(True)
 
+def get_root_bone_of_armature(armature):
+    return armature.data.edit_bones[armature.data.edit_bones.keys()[0]]
+
 def add_bone_to_armature(armature, bone_name="Bone.001", head=(0, 0, 0), tail=(0, 0, 1), parent_bone=None):
     bpy.context.view_layer.objects.active = armature
     bpy.ops.object.mode_set(mode='EDIT')
@@ -135,6 +138,8 @@ def add_bone_to_armature(armature, bone_name="Bone.001", head=(0, 0, 0), tail=(0
 
     if parent_bone is not None:
         new_bone.parent = parent_bone
+    else:
+        new_bone.parent = get_root_bone_of_armature(armature)
 
     bpy.ops.object.mode_set(mode='OBJECT')
 
@@ -153,7 +158,7 @@ def create_micro_bone_pass(obj, rig):
         obj.parent.type == "ARMATURE" # have parent armature
         and obj.modifiers.contains("Armature") # have armature modifier
         # explicitly wants to have a micro bone
-        or hasattr(obj, CREATE_MICRO_BONE) 
+        or hasattr(obj, CREATE_MICRO_BONE) # condition error here btw)
         and obj[CREATE_MICRO_BONE] is True # have explicit setting
     ):
         return
@@ -166,9 +171,9 @@ def create_micro_bone_pass(obj, rig):
     if MICRO_BONE_NAME in obj.keys():
         name = obj[MICRO_BONE_NAME]
 
-    new_bone = add_bone_to_armature(rig, name, obj.location, obj.location, parent_bone)
+    bone = add_bone_to_armature(rig, name, obj.location, obj.location, parent_bone)
 
-    fill_object_with_vertex_weight(obj, new_bone.name, 1)
+    fill_object_with_vertex_weight(obj, bone.name, 1)
 
     pass
 
