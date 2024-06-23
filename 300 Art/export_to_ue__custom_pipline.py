@@ -6,6 +6,10 @@ import traceback
 
 # constants ------------------------------------------------------------------
 DONT_FIX_NORMALS = "dont_fix_normals"
+IS_REVERT_CHANGES = True
+TAB_SIZE = 3
+THIS_FILE_NAME = "export_to_ue__custom_pipline.py"
+LOG_FILE_NAME = f"{THIS_FILE_NAME}.log"
 
 
 
@@ -13,10 +17,10 @@ DONT_FIX_NORMALS = "dont_fix_normals"
 # functions ------------------------------------------------------------------
 
 def tab():
-    return " " * 3
+    return " " * TAB_SIZE
 
 def clear_log_file():
-    with open("export_to_ue__custom_pipline.log", "w") as f:
+    with open(LOG_FILE_NAME, "w") as f:
         pass
 
 def log_to_file(message):
@@ -25,7 +29,7 @@ def log_to_file(message):
     indentation = tab() * stack_depth
     log_message = f"{time_written}: {indentation}{message}"
     
-    with open("export_to_ue__custom_pipline.log", "a") as f:
+    with open(LOG_FILE_NAME, "a") as f:
         f.write(f"{log_message}\n")
 
 def deselect_everything():
@@ -64,8 +68,8 @@ def update_view_print(message):
     print(message)
     log_to_file(message)
 
-def force_rename_collection(collection, name):
-    collection.name = name
+# def force_rename_collection(collection, name):
+#     collection.name = name
 
 # Select the object. I SAD: SELECT THE OBJECT
 def force_select_object(obj):
@@ -88,7 +92,7 @@ def fix_object_normals(obj):
 
 
 def export_armature_with_its_geometry_to_ue(rig):
-    update_view_print(f"Exporting {rig.name} started")
+    update_view_print(f"Exporting for {rig.name} started")
 
     original_collection_of_the_rig = rig.users_collection[0]
     temporal_export_collection = bpy.data.collections.new(name="Export")
@@ -110,7 +114,7 @@ def export_armature_with_its_geometry_to_ue(rig):
             and obj.type is not None 
             and obj.type == "MESH"
         ):
-            update_view_print(f"{tab()}Skipping {obj.name if obj else 'deez nust'}")
+            update_view_print(f"{tab()}Skipped {obj.name if obj else 'deez nust'}")
             continue
 
         meshes.append(obj)
@@ -142,8 +146,10 @@ def export_armature_with_its_geometry_to_ue(rig):
 
 
 
-    # # Send to Unreal Engine all things from the "Export" collection
+    # Send to Unreal Engine all things from the "Export" collection
+    update_view_print(f"Sending to Unreal started")
     # bpy.ops.wm.send2ue()
+    update_view_print(f"Sending to Unreal finished")
 
     # delete the "Export" collection
     bpy.data.collections.remove(temporal_export_collection)
@@ -178,15 +184,16 @@ def main():
         export_armature_with_its_geometry_to_ue(rig)
 
     update_view_print(f"All rigs exported")
-
-    # # Revert all changes to the Blender file
-    # bpy.ops.wm.revert_mainfile()
-
     update_view_print(f"SCRIPT FINISHED")
+    
+    # Revert all changes to the Blender file
+    if IS_REVERT_CHANGES:
+        bpy.ops.wm.revert_mainfile()
 
 
 
-# Running the async function
+
+# Running the sync function
 main()
 
 
