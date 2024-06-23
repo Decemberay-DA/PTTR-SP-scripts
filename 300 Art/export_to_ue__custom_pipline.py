@@ -1,9 +1,9 @@
 import bpy
 import asyncio
 
-# Deselect all objects
 def deselect_everything():
     bpy.ops.object.select_all(action='DESELECT')
+
 
 def map(iterator, func):
     for item in iterator:
@@ -28,17 +28,20 @@ def update_view():
     bpy.context.view_layer.update()
     bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
 
+def update_view_print(message):
+    update_view()
+    print(message)
 
 
 
 async def export_armature_with_its_geometry_to_ue(rig):
 
-    print(f"Exporting {rig.name}")
+    update_view_print(f"Exporting {rig.name}")
 
     temporal_export_collection = bpy.data.collections.new(name="Export")
     bpy.context.scene.collection.children.link(temporal_export_collection)
 
-    update_view()
+    update_view_print(f"Created collection {temporal_export_collection.name}")
 
     # add rig and its childs to the "Export" collection
     map(
@@ -48,8 +51,14 @@ async def export_armature_with_its_geometry_to_ue(rig):
 
     for obj in temporal_export_collection.all_objects:
         # only for geometry
-        if obj.type != "MESH":
+        if (
+            hasattr(obj, 'type') 
+            and obj.type is not None 
+            and obj.type != "MESH"
+        ):
             continue
+
+
 
         # Select the object
         bpy.context.view_layer.objects.active = obj
@@ -63,8 +72,7 @@ async def export_armature_with_its_geometry_to_ue(rig):
         # Deselect the object
         deselect_everything()
 
-        update_view()
-        print(f"Maked unique user and applied visual transform to {obj.name}")
+        update_view_print(f"Made unique user and applied visual transform to {obj.name}")
 
 
     # Send to Unreal Engine
@@ -73,8 +81,7 @@ async def export_armature_with_its_geometry_to_ue(rig):
     # delete the "Export" collection
     bpy.data.collections.remove(temporal_export_collection)
 
-    update_view()
-    print(f"Exported rig and its childs {rig.name}")
+    update_view_print(f"Exported rig and its childs {rig.name}")
 
     pass
 
@@ -84,7 +91,7 @@ async def export_armature_with_its_geometry_to_ue(rig):
 async def main():
     # Save the current Blender file
     bpy.ops.wm.save_mainfile()
-    update_view()
+    update_view_print("Saved the current Blender file")
 
     deselect_everything()
 
@@ -94,10 +101,11 @@ async def main():
             bpy.data.objects["shum_control_rig"]
         ]
 
-    update_view()
     for rig in rigs_to_export:
         await asyncio.sleep(1)
         await export_armature_with_its_geometry_to_ue(rig)
+
+    update_view_print("All rigs exported")
 
     # Revert all changes to the Blender file
     bpy.ops.wm.revert_mainfile()
