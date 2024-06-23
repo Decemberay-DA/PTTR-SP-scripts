@@ -1,4 +1,15 @@
 import bpy
+import datetime
+import traceback
+
+def log_to_file(message):
+    time_written = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    stack_depth = len(traceback.extract_stack()) - 1 
+    indentation = " " * (stack_depth * 1)  # x spaces per stack depth level
+    log_message = f"{time_written}: {indentation}{message}"
+    
+    with open("export_to_ue__custom_pipline.log", "a") as f:
+        f.write(f"{log_message}\n")
 
 def deselect_everything():
     bpy.ops.object.select_all(action='DESELECT')
@@ -34,6 +45,7 @@ def update_view():
 def update_view_print(message):
     update_view()
     print(message)
+    log_to_file(message)
 
 
 
