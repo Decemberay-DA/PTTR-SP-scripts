@@ -27,26 +27,7 @@ MICRO_BONE_PARENT = "micro_bone_parent" # optional name of the bone that will be
 IS_APPLY_RENDER_OR_VIEW_MODIFIERS = False
 
 
-# functions ------------------------------------------------------------------
-
-def tab():
-    return " " * TAB_SIZE
-
-def clear_log_file():
-    with open(LOG_FILE_NAME, "w") as f:
-        pass
-
-def log_to_file(message):
-    time_written = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-    stack_depth = len(traceback.extract_stack()) - 1 - 10
-    indentation = tab() * stack_depth
-    log_message = f"{time_written}: {indentation}{message}"
-    
-    with open(LOG_FILE_NAME, "a") as f:
-        f.write(f"{log_message}\n")
-
-def deselect_everything():
-    bpy.ops.object.select_all(action='DESELECT')
+# utils ------------------------------------------------------------------
 
 def map_action(iterator, func):
     for item in iterator:
@@ -61,6 +42,90 @@ def map_iter_pipe(iterator, *funcs):
         for func in funcs:
             item = func(item)
         yield item
+
+def execute_pass_queue(obj, *fn):
+    for fn in fn:
+        fn(obj)
+
+def do(obj, fn):
+    fn()
+    return obj
+
+def btw(fn):
+    fn()
+    return lambda obj: obj
+
+class Deco:
+    @staticmethod
+    def returns_self(method):
+        def wrapper(self, *args, **kwargs):
+            method(self, *args, **kwargs)
+            return self
+        return wrapper
+
+
+# logging ------------------------------------------------------------------
+
+class LoggingH:
+    @staticmethod
+    def tab():
+        return " " * TAB_SIZE
+    
+    @staticmethod
+    def clear_log_file():
+        with open(LOG_FILE_NAME, "w") as f:
+            pass
+
+    @staticmethod
+    def log_to_file(message):
+        time_written = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        stack_depth = len(traceback.extract_stack()) - 1 - 10
+        indentation = LoggingH.tab() * stack_depth
+        log_message = f"{time_written}: {indentation}{message}"
+        
+        with open(LOG_FILE_NAME, "a") as f:
+            f.write(f"{log_message}\n")
+
+class LoggerMonad:
+    def __init__(self, log_file_name):
+        self.log_file_name = log_file_name
+        self.current_intent = 0
+
+    @property
+    def current_intent(self):
+        return self._current_intent
+    
+    @property
+    def current_intent(self, level):
+        self._current_intent = level
+    
+    @property
+    def log_file_name(self):
+        return self.log_file_name
+
+    @Deco.returns_self
+    def clear_log_file(self):
+        LoggingH.clear_log_file()
+
+    @Deco.returns_self
+    def write(self, message):
+        LoggingH.log_to_file(message)
+    
+    @Deco.returns_self 
+    def up(self):
+        self.current_intent += 1
+    
+    @Deco.returns_self    
+    def down(self):
+        self.current_intent -= 1
+
+
+
+# blender functions ------------------------------------------------------------------
+
+def deselect_everything():
+    bpy.ops.object.select_all(action='DESELECT')
+
 
 def iter_hierarchy_inclusive(obj):
     yield obj
@@ -85,7 +150,7 @@ def update_view():
 def update_view_print(message):
     update_view()
     print(message)
-    log_to_file(message)
+    LoggingH.log_to_file(message)
 
 # def force_rename_collection(collection, name):
 #     collection.name = name
@@ -98,6 +163,21 @@ def force_select_object(obj):
     else:
         bpy.context.view_layer.objects.active = obj
         obj.select_set(True)
+
+# def temporal_select_object(obj, fn):
+#     old_active = bpy.context.view_layer.objects.active
+#     old_selected = bpy.context.selected_objects
+
+#     force_select_object(obj)
+#     fn()
+
+#     bpy.context.view_layer.objects.active = old_active
+#     for ob in old_selected:
+#         ob.select_set(True)
+
+
+
+# passes ------------------------------------------------------------------
 
 def fix_object_normal_pass(obj):
     if DONT_FIX_NORMALS not in obj.keys() or obj[DONT_FIX_NORMALS] is False:
@@ -112,25 +192,6 @@ def fix_object_normals(obj):
     bpy.ops.mesh.select_all(action='DESELECT')
     bpy.ops.object.mode_set(mode='OBJECT')
 
-
-
-def execute_pass_queue(obj, *fn):
-    for fn in fn:
-        fn(obj)
-
-
-
-
-# def temporal_select_object(obj, fn):
-#     old_active = bpy.context.view_layer.objects.active
-#     old_selected = bpy.context.selected_objects
-
-#     force_select_object(obj)
-#     fn()
-
-#     bpy.context.view_layer.objects.active = old_active
-#     for ob in old_selected:
-#         ob.select_set(True)
 
 def get_root_bone_of_armature(armature):
     return armature.data.edit_bones[armature.data.edit_bones.keys()[0]]
@@ -190,7 +251,7 @@ def create_micro_bone_pass(obj, rig):
 def apply_render_geometry_modifiers_pass(obj):
     if IS_APPLY_RENDER_OR_VIEW_MODIFIERS:
         apply_render_geometry_modifiers(obj)
-        update_view_print(f"{tab()}Applied render modifiers to {obj.name}")
+        update_view_print(f"{LoggingH.tab()}Applied render modifiers to {obj.name}")
 
 def apply_render_geometry_modifiers(obj):
     if obj.modifiers:
@@ -201,13 +262,6 @@ def apply_render_geometry_modifiers(obj):
             else:
                 print(f"Skipping modifier '{modifier.name}' (cz not enabled for render)")
 
-def do(obj, fn):
-    fn()
-    return obj
-
-def btw(fn):
-    fn()
-    return lambda obj: obj
 
 def export_armature_with_its_geometry_to_ue(rig):
     update_view_print(f"Exporting for {rig.name} started")
@@ -232,15 +286,15 @@ def export_armature_with_its_geometry_to_ue(rig):
             and obj.type is not None 
             and obj.type == "MESH"
         ):
-            update_view_print(f"{tab()}Skipped {obj.name if obj else 'deez nust'}")
+            update_view_print(f"{LoggingH.tab()}Skipped {obj.name if obj else 'deez nust'}")
             continue
 
         meshes.append(obj)
-        update_view_print(f"{tab()}{obj.name}")
+        update_view_print(f"{LoggingH.tab()}{obj.name}")
 
 
 
-    # map_iter_pipe(
+    # map_iter_pipe( # no needs really to use it on root level, maybe inside other functions is ok
     #     meshes,
     #     lambda x: (update_view_print(f"Selected {x.name}"), x),
     #     # Make single user and apply visual transform
@@ -278,7 +332,7 @@ def export_armature_with_its_geometry_to_ue(rig):
 
 
         bpy.ops.object.visual_transform_apply()
-        update_view_print(f"{tab()}Made single user and applied visual transform to {obj.name}")
+        update_view_print(f"{LoggingH.tab()}Made single user and applied visual transform to {obj.name}")
 
 
         fix_object_normal_pass(obj)
@@ -287,12 +341,12 @@ def export_armature_with_its_geometry_to_ue(rig):
 
         
         obj.data.name = f"{obj.name}__unique_mesh"
-        update_view_print(f"{tab()}Renamed object data to {obj.data.name}")
+        update_view_print(f"{LoggingH.tab()}Renamed object data to {obj.data.name}")
 
         obj.select_set(False)
         deselect_everything()
 
-        update_view_print(f"{tab()}Finished for {obj.name}")
+        update_view_print(f"{LoggingH.tab()}Finished for {obj.name}")
 
 
 
@@ -319,7 +373,7 @@ def main():
     # Save the current Blender file
     bpy.ops.wm.save_mainfile()
 
-    clear_log_file()
+    LoggingH.clear_log_file()
 
     update_view_print("Saved the current Blender file")
 
