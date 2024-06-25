@@ -1,0 +1,22 @@
+{
+    "main": {
+        "is_revert_changes": false,
+        "is_export_to_ue": false
+    },
+    "logging": {
+        "tab_size": 3,
+        "this_file_name": "ExporterScript",
+        "log_file_name": "ExporterScript.log"
+    },
+    "passes": {
+        "fix_normals": {
+            "enabled": true
+        },
+        "create_micro_bone": {
+            "enabled": true
+        },
+        "apply_render_geometry_modifiers": {
+            "enabled": false
+        }
+    }
+}
