@@ -94,39 +94,38 @@ class Decorating:
 # ConfigLoader.py
 class ConfigLoader:
     config_file_json = """
-    {
-        "main": {
-            "is_revert_changes": false,
-            "is_export_to_ue": false
+{
+    "main": {
+        "is_revert_changes": false,
+        "is_export_to_ue": false
+    },
+    "logging": {
+        "tab_size": 3,
+        "this_file_name": "ExporterScript.py",
+        "log_file_name": "ExporterScript.py.log"
+    },
+    "passes": {
+        "fix_normals": {
+            "enabled": true,
+            "attribute_name": "dont_fix_normals"
         },
-        "logging": {
-            "tab_size": 3,
-            "this_file_name": "ExporterScript",
-            "log_file_name": "ExporterScript.log"
+        "create_micro_bone": {
+            "enabled": true,
+            "attribute_name": "create_micro_bone",
+            "micro_bone_parent": "micro_bone_parent",
+            "micro_bone_name": "micro_bone_name"
         },
-        "passes": {
-            "fix_normals": {
-                "enabled": true,
-                "attribute_name": "dont_fix_normals"
-            },
-            "create_micro_bone": {
-                "enabled": true,
-                "attribute_name": "create_micro_bone",
-                "micro_bone_parent": "micro_bone_parent",
-                "micro_bone_name": "micro_bone_name"
-            },
-            "apply_render_geometry_modifiers": {
-                "enabled": false,
-                "attribute_name": "is_apply_render_or_view_modifiers"
-            }
+        "apply_render_geometry_modifiers": {
+            "enabled": false,
+            "attribute_name": "is_apply_render_or_view_modifiers"
         }
     }
+}
     """
+
     @staticmethod
     def load_config():
-        # with open("config.json", "r") as config_file:
-        #     config_dict = json.load(config_file)
-        config_dict = json.load(ConfigLoader.config_file_json)
+        config_dict = json.loads(ConfigLoader.config_file_json)
 
         def dict_to_namespace(d):
             return json.loads(json.dumps(d), object_hook=lambda d: SimpleNamespace(**d))
@@ -163,7 +162,7 @@ config = ConfigLoader.load_config()
 
 class Logging:
     def tab():
-        return " " * config.tab_size
+        return " " * config.logging.tab_size
 
     def clear_log_file():
         with open(config.logging.log_file_name, "w") as f:
@@ -343,10 +342,10 @@ class BlenderEX:
 def fix_object_normal_pass(obj):
     if config.passes.fix_normals.attribute_name not in obj.keys() or obj[config.passes.fix_normals.attribute_name] is False:
         fix_object_normals(obj)
-        Utils.update_view_print(f"Normals fixed for {obj.name}")
+        BlenderEX.update_view_print(f"Normals fixed for {obj.name}")
 
 def fix_object_normals(obj):
-    Utils.force_select_object(obj)
+    BlenderEX.force_select_object(obj)
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.mesh.select_all(action='SELECT')
     bpy.ops.mesh.normals_make_consistent(inside=False)
@@ -366,7 +365,7 @@ def add_bone_to_armature(armature, bone_name="Bone.001", head=(0, 0, 0), tail=(0
     if parent_bone is not None:
         new_bone.parent = parent_bone
     else:
-        new_bone.parent = Utils.get_root_bone_of_armature(armature)
+        new_bone.parent = BlenderEX.get_root_bone_of_armature(armature)
 
     bpy.ops.object.mode_set(mode='OBJECT')
 
@@ -398,17 +397,17 @@ def create_micro_bone_pass(obj, rig):
         name = obj[mb_cnf.micro_bone_name]
 
     bone = add_bone_to_armature(rig, name, obj.location, obj.location, parent_bone)
-    Utils.update_view_print(f"Created micro bone {bone.name} for {obj.name}")
+    BlenderEX.update_view_print(f"Created micro bone {bone.name} for {obj.name}")
 
     fill_object_with_vertex_weight(obj, bone.name, 1)
-    Utils.update_view_print(f"Filled vertex weight for {obj.name}")
+    BlenderEX.update_view_print(f"Filled vertex weight for {obj.name}")
 
     pass
 
 def apply_render_geometry_modifiers_pass(obj):
     if config.passes.apply_render_geometry_modifiers.enabled:
         apply_render_geometry_modifiers(obj)
-        Utils.update_view_print(f"{Logging.tab()}Applied render modifiers to {obj.name}")
+        BlenderEX.update_view_print(f"{Logging.tab()}Applied render modifiers to {obj.name}")
 
 def apply_render_geometry_modifiers(obj):
     if obj.modifiers:
@@ -462,16 +461,16 @@ def apply_render_geometry_modifiers(obj):
 
 
 def run_export_pipline_for_rig(rig):
-    Utils.update_view_print(f"Exporting for {rig.name} started")
+    BlenderEX.update_view_print(f"Exporting for {rig.name} started")
 
     original_collection_of_the_rig = rig.users_collection[0]
     temporal_export_collection = bpy.data.collections.new(name="Export")
     bpy.context.scene.collection.children.link(temporal_export_collection)
-    Utils.update_view_print(f"Created collection {temporal_export_collection.name}")
+    BlenderEX.update_view_print(f"Created collection {temporal_export_collection.name}")
 
     # add rig and its childs to the "Export" collection
-    Utils.move_to_collection_with_nierarchy(rig, temporal_export_collection)
-    Utils.update_view_print(f"Hierarchy of {rig.name} moved to {temporal_export_collection.name}")
+    BlenderEX.move_to_collection_with_nierarchy(rig, temporal_export_collection)
+    BlenderEX.update_view_print(f"Hierarchy of {rig.name} moved to {temporal_export_collection.name}")
 
 
     # create game rig  ------------------------------------------------
@@ -481,7 +480,7 @@ def run_export_pipline_for_rig(rig):
     # processing meshes and exporting to unreal ------------------------------------------------
 
     meshes = []
-    Utils.update_view_print(f"Collecting meshes of {rig.name}:")
+    BlenderEX.update_view_print(f"Collecting meshes of {rig.name}:")
     for obj in temporal_export_collection.all_objects:
         # only for geometry
         if not (
@@ -490,19 +489,19 @@ def run_export_pipline_for_rig(rig):
             and obj.type is not None 
             and obj.type == "MESH"
         ):
-            Utils.update_view_print(f"{Logging.tab()}Skipped {obj.name if obj else 'deez nust'}")
+            BlenderEX.update_view_print(f"{Logging.tab()}Skipped {obj.name if obj else 'deez nust'}")
             continue
 
         meshes.append(obj)
-        Utils.update_view_print(f"{Logging.tab()}{obj.name}")
+        BlenderEX.update_view_print(f"{Logging.tab()}{obj.name}")
 
 
 
 
     for obj in meshes:
-        Utils.force_select_object(obj)
+        BlenderEX.force_select_object(obj)
 
-        Utils.update_view_print(f"Selected {obj.name}")
+        BlenderEX.update_view_print(f"Selected {obj.name}")
 
         # Make single user and apply visual transform
         bpy.ops.object.make_single_user(object=True, obdata=True)
@@ -513,7 +512,7 @@ def run_export_pipline_for_rig(rig):
 
 
         bpy.ops.object.visual_transform_apply()
-        Utils.update_view_print(f"{Logging.tab()}Made single user and applied visual transform to {obj.name}")
+        BlenderEX.update_view_print(f"{Logging.tab()}Made single user and applied visual transform to {obj.name}")
 
 
         fix_object_normal_pass(obj)
@@ -522,26 +521,26 @@ def run_export_pipline_for_rig(rig):
 
         
         obj.data.name = f"{obj.name}__unique_mesh"
-        Utils.update_view_print(f"{Logging.tab()}Renamed object data to {obj.data.name}")
+        BlenderEX.update_view_print(f"{Logging.tab()}Renamed object data to {obj.data.name}")
 
         obj.select_set(False)
-        Utils.deselect_everything()
+        BlenderEX.deselect_everything()
 
-        Utils.update_view_print(f"{Logging.tab()}Finished for {obj.name}")
+        BlenderEX.update_view_print(f"{Logging.tab()}Finished for {obj.name}")
 
 
 
     # Send to Unreal Engine all things from the "Export" collection
     if config.main.is_export_to_ue:
-        Utils.update_view_print(f"Sending to Unreal started")
+        BlenderEX.update_view_print(f"Sending to Unreal started")
         bpy.ops.wm.send2ue()
-        Utils.update_view_print(f"Sending to Unreal finished")
+        BlenderEX.update_view_print(f"Sending to Unreal finished")
 
     # delete the "Export" collection
     bpy.data.collections.remove(temporal_export_collection)
-    Utils.move_to_collection_with_nierarchy(rig, original_collection_of_the_rig)
-    Utils.update_view_print(f"Moved {rig.name} to {original_collection_of_the_rig.name}")
-    Utils.update_view_print(f"Exported rig and its childs {rig.name} finished")
+    BlenderEX.move_to_collection_with_nierarchy(rig, original_collection_of_the_rig)
+    BlenderEX.update_view_print(f"Moved {rig.name} to {original_collection_of_the_rig.name}")
+    BlenderEX.update_view_print(f"Exported rig and its childs {rig.name} finished")
 
     pass
 
@@ -588,9 +587,9 @@ def main():
 
     Logging.clear_log_file()
 
-    Utils.update_view_print("Saved the current Blender file")
+    BlenderEX.update_view_print("Saved the current Blender file")
 
-    Utils.deselect_everything()
+    BlenderEX.deselect_everything()
 
     # Get the objects to export
     rigs_to_export = [
@@ -602,8 +601,8 @@ def main():
     for rig in rigs_to_export:
         run_export_pipline_for_rig(rig)
 
-    Utils.update_view_print(f"All rigs exported")
-    Utils.update_view_print(f"SCRIPT FINISHED")
+    BlenderEX.update_view_print(f"All rigs exported")
+    BlenderEX.update_view_print(f"SCRIPT FINISHED")
 
     # Revert all changes to the Blender file
     if config.main.is_revert_changes:
