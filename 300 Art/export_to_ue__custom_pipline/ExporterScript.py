@@ -1,5 +1,11 @@
+import sys
+import os
+
+script_dir = os.path.dirname(os.path.abspath(__file__))
+if script_dir not in sys.path:
+    sys.path.append(script_dir)
+
 import bpy
-import Utils as U
 import Logging
 from types import *
 import BlenderEX as b
@@ -116,8 +122,10 @@ def run_export_pipline_for_rig(rig):
     b.update_view_print(f"Hierarchy of {rig.name} moved to {temporal_export_collection.name}")
 
 
-    # processing meshes and exporting to unreal ------------------------------------------------
-    # processing meshes and exporting to unreal ------------------------------------------------
+    # create game rig  ------------------------------------------------
+
+
+
     # processing meshes and exporting to unreal ------------------------------------------------
 
     meshes = []
