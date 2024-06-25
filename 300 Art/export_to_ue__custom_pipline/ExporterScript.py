@@ -1,39 +1,16 @@
 import bpy
-from Utils import Utils as u
-from Logging import *
+import Utils as U
+import Logging
 from types import *
-from BlenderEX import BEX as b
-from ConfigLoader import load_config
+import BlenderEX as b
+import ConfigLoader
 
-config = load_config()
-
-# constants ------------------------------------------------------------------
-# main settings
-# IS_REVERT_CHANGES = False
-# IS_EXPORT_TO_UE = False
-# logging
-TAB_SIZE = 3
-THIS_FILE_NAME = "export_to_ue__custom_pipline.py"
-LOG_FILE_NAME = f"{THIS_FILE_NAME}.log" 
-
-
-
-# optional passes pr object settings ------------------------------------------------------------------
-# normals
-DONT_FIX_NORMALS = "dont_fix_normals"
-# create a bone for this object that will be used like its transform origin
-# currently depends on having a parent armature and an armature modifier and having no vertex groups
-CREATE_MICRO_BONE = "create_micro_bone" # optional
-MICRO_BONE_NAME = "micro_bone_name" # optional name of the bone
-MICRO_BONE_PARENT = "micro_bone_parent" # optional name of the bone that will be parent of this bone to
-#
-IS_APPLY_RENDER_OR_VIEW_MODIFIERS = False
-
+config = ConfigLoader.load_config().logging
 
 # passes ------------------------------------------------------------------
 
 def fix_object_normal_pass(obj):
-    if DONT_FIX_NORMALS not in obj.keys() or obj[DONT_FIX_NORMALS] is False:
+    if config.passes.fix_normals.attribute_name not in obj.keys() or obj[config.passes.fix_normals.attribute_name] is False:
         fix_object_normals(obj)
         b.update_view_print(f"Normals fixed for {obj.name}")
 
@@ -46,8 +23,6 @@ def fix_object_normals(obj):
     bpy.ops.object.mode_set(mode='OBJECT')
 
 
-def get_root_bone_of_armature(armature):
-    return armature.data.edit_bones[armature.data.edit_bones.keys()[0]]
 
 def add_bone_to_armature(armature, bone_name="Bone.001", head=(0, 0, 0), tail=(0, 0, 1), parent_bone=None):
     bpy.context.view_layer.objects.active = armature
@@ -60,7 +35,7 @@ def add_bone_to_armature(armature, bone_name="Bone.001", head=(0, 0, 0), tail=(0
     if parent_bone is not None:
         new_bone.parent = parent_bone
     else:
-        new_bone.parent = get_root_bone_of_armature(armature)
+        new_bone.parent = b.get_root_bone_of_armature(armature)
 
     bpy.ops.object.mode_set(mode='OBJECT')
 
@@ -80,18 +55,16 @@ def has_armature_modifier(obj):
     return False
 
 def create_micro_bone_pass(obj, rig):
-    # wants_implicitly = obj.parent and obj.parent.type == "ARMATURE" and has_armature_modifier(obj) and len(obj.vertex_groups) == 0
-    # wants_explicitly = hasattr(obj, CREATE_MICRO_BONE) and obj[CREATE_MICRO_BONE]
-    # if wants_implicitly or wants_explicitly:
-    #     return
+    mb_cnf = config.passes.create_micro_bone
+
 
     parent_bone = None
-    if MICRO_BONE_PARENT in obj.keys():
-        parent_bone = rig.data.edit_bones[obj[MICRO_BONE_PARENT]]
+    if mb_cnf.micro_bone_parent in obj.keys():
+        parent_bone = rig.data.edit_bones[obj[mb_cnf.micro_bone_parent]]
 
     name = f"{obj.name}__micro_bone"
-    if MICRO_BONE_NAME in obj.keys():
-        name = obj[MICRO_BONE_NAME]
+    if mb_cnf.micro_bone_name in obj.keys():
+        name = obj[mb_cnf.micro_bone_name]
 
     bone = add_bone_to_armature(rig, name, obj.location, obj.location, parent_bone)
     b.update_view_print(f"Created micro bone {bone.name} for {obj.name}")
@@ -102,9 +75,9 @@ def create_micro_bone_pass(obj, rig):
     pass
 
 def apply_render_geometry_modifiers_pass(obj):
-    if IS_APPLY_RENDER_OR_VIEW_MODIFIERS:
+    if config.passes.apply_render_geometry_modifiers.enabled:
         apply_render_geometry_modifiers(obj)
-        b.update_view_print(f"{LoggingH.tab()}Applied render modifiers to {obj.name}")
+        b.update_view_print(f"{Logging.tab()}Applied render modifiers to {obj.name}")
 
 def apply_render_geometry_modifiers(obj):
     if obj.modifiers:
@@ -114,6 +87,20 @@ def apply_render_geometry_modifiers(obj):
                 bpy.ops.object.modifier_apply(modifier=modifier.name)
             else:
                 print(f"Skipping modifier '{modifier.name}' (cz not enabled for render)")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 def run_export_pipline_for_rig(rig):
@@ -143,11 +130,11 @@ def run_export_pipline_for_rig(rig):
             and obj.type is not None 
             and obj.type == "MESH"
         ):
-            b.update_view_print(f"{LoggingH.tab()}Skipped {obj.name if obj else 'deez nust'}")
+            b.update_view_print(f"{Logging.tab()}Skipped {obj.name if obj else 'deez nust'}")
             continue
 
         meshes.append(obj)
-        b.update_view_print(f"{LoggingH.tab()}{obj.name}")
+        b.update_view_print(f"{Logging.tab()}{obj.name}")
 
 
 
@@ -166,7 +153,7 @@ def run_export_pipline_for_rig(rig):
 
 
         bpy.ops.object.visual_transform_apply()
-        b.update_view_print(f"{LoggingH.tab()}Made single user and applied visual transform to {obj.name}")
+        b.update_view_print(f"{Logging.tab()}Made single user and applied visual transform to {obj.name}")
 
 
         fix_object_normal_pass(obj)
@@ -175,12 +162,12 @@ def run_export_pipline_for_rig(rig):
 
         
         obj.data.name = f"{obj.name}__unique_mesh"
-        b.update_view_print(f"{LoggingH.tab()}Renamed object data to {obj.data.name}")
+        b.update_view_print(f"{Logging.tab()}Renamed object data to {obj.data.name}")
 
         obj.select_set(False)
         b.deselect_everything()
 
-        b.update_view_print(f"{LoggingH.tab()}Finished for {obj.name}")
+        b.update_view_print(f"{Logging.tab()}Finished for {obj.name}")
 
 
 
@@ -203,11 +190,20 @@ def run_export_pipline_for_rig(rig):
 
 
 
+
+
+
+
+
+
+
+
+
 def main():
     # Save the current Blender file
     bpy.ops.wm.save_mainfile()
 
-    LoggingH.clear_log_file()
+    Logging.clear_log_file()
 
     b.update_view_print("Saved the current Blender file")
 
@@ -233,7 +229,4 @@ def main():
 
 
 
-# Running the sync function
 main()
-
-

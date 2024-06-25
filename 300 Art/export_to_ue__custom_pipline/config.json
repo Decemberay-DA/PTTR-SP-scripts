@@ -10,13 +10,18 @@
     },
     "passes": {
         "fix_normals": {
-            "enabled": true
+            "enabled": true,
+            "attribute_name": "dont_fix_normals"
         },
         "create_micro_bone": {
-            "enabled": true
+            "enabled": true,
+            "attribute_name": "create_micro_bone",
+            "micro_bone_parent": "micro_bone_parent",
+            "micro_bone_name": "micro_bone_name"
         },
         "apply_render_geometry_modifiers": {
-            "enabled": false
+            "enabled": false,
+            "attribute_name": "is_apply_render_or_view_modifiers"
         }
     }
 }
