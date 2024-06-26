@@ -1,4 +1,5 @@
 import datetime
+import inspect
 import traceback
 import bpy
 import json
@@ -161,12 +162,31 @@ config = ConfigLoader.load_config()
 
 
 class Logging:
+    @staticmethod
+    def logged_method(method, is_wrapped=False):
+        def wrapper(self, *args, **kwargs):
+
+            Logging.logger.up()
+            method_arguments = ", ".join(inspect.getfullargspec(method).args)
+            Logging.logger.write(f"{method.__name__} started " + method_arguments)
+
+            method(self, *args, **kwargs)
+
+            if is_wrapped:
+                Logging.logger.write(f"{method.__name__} finished")
+
+            Logging.logger.down()
+
+            return self
+        return wrapper
+
     def tab():
         return " " * config.logging.tab_size
 
     def clear_log_file():
         with open(config.logging.log_file_name, "w") as f:
             pass
+
     def log_to_file(message):
         time_written = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
         stack_depth = len(traceback.extract_stack()) - 1 - 10
@@ -175,6 +195,7 @@ class Logging:
         
         with open(config.logging.log_file_name, "a") as f:
             f.write(f"{log_message}\n")
+
 
     class LoggerMonad:
         def __init__(self, log_file_name):
@@ -209,6 +230,8 @@ class Logging:
         def down(self):
             self.current_intent -= 1
 
+    # shared instance of logger for this file
+    logger = LoggerMonad(config.logging.log_file_name)
 
 
 
@@ -243,25 +266,31 @@ class Logging:
 # BlenderEX.py
 class BlenderEX:
     @staticmethod
+    @Logging.logged_method
     def get_root_bone_of_armature(armature):
         return armature.data.edit_bones[armature.data.edit_bones.keys()[0]]
 
     @staticmethod
+    @Logging.logged_method
     def deselect_everything():
         bpy.ops.object.select_all(action='DESELECT')
 
     @staticmethod
+    @Logging.logged_method
     def iter_hierarchy_inclusive(obj):
         yield obj
         for child in obj.children:
             yield from BlenderEX.iter_hierarchy_inclusive(child)
+
     @staticmethod
+    @Logging.logged_method
     def move_to_collection(obj, target_collection):
         for col in obj.users_collection:
             col.objects.unlink(obj)
         target_collection.objects.link(obj)
 
     @staticmethod
+    @Logging.logged_method
     def move_to_collection_with_nierarchy(obj, target_collection):
         Utils.map_action(
             BlenderEX.iter_hierarchy_inclusive(obj), 
@@ -269,6 +298,7 @@ class BlenderEX:
         )
 
     @staticmethod
+    @Logging.logged_method
     def update_view():
         bpy.context.view_layer.update()
         bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
