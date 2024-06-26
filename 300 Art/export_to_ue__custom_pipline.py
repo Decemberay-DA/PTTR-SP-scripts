@@ -8,7 +8,7 @@ import json
 from types import SimpleNamespace
 from typing import TypeVar, Generic, Callable, Optional
 from typing import *
-
+import pprint
 
 
 
@@ -16,6 +16,19 @@ from typing import *
 
 # Utils.py
 class Utils:
+    @staticmethod
+    def recirsive_to_string(obj) -> str:
+        string = ""
+        for name, value in inspect.getmembers(obj):
+            string += f'{name}: {value!r}\n'
+            if inspect.ismodule(value):
+                string += Utils.recirsive_to_string(value)
+        return string
+    
+    # @staticmethod
+    # def to_json(self) -> str:
+    #     return json.dumps(self, default=lambda o: o.__dict__)
+
     @staticmethod
     def map_action(iterator, func):
         for item in iterator:
@@ -158,6 +171,7 @@ class ConfigLoader:
         "is_export_to_ue": false
     },
     "logging": {
+        "is_update_view_every_logging": false,
         "tab_size": 3,
         "this_file_name": "export_to_ue__custom_pipline.py",
         "log_file_name": "export_to_ue__custom_pipline.log",
@@ -244,7 +258,45 @@ class Logging:
                 method(*args, **kwargs) if is_takes_any_parameters == True else method()
             )
 
-            update_view()
+            if ConfigLoader.config.logging.is_update_view_every_logging: 
+                update_view()
+
+            post_message = result.match(
+                none = lambda: f"< {method.__name__} -> None", 
+                some = lambda x: f"< {method.__name__} -> {x!r}")
+            Logging.logger.write(post_message)
+            Logging.logger.down()
+
+            return result.match(none=lambda: None, some=lambda x: x)
+        
+        return two_lined # is good)
+
+    @staticmethod
+    def logged_method_hight(method):
+        method_signature = inspect.signature(method)
+        is_takes_any_parameters = len(method_signature.parameters) > 0
+
+        def update_view():
+            bpy.context.view_layer.update()
+            bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
+
+        def two_lined(*args, **kwargs):
+            Logging.logger.up()
+            if is_takes_any_parameters:
+                method_arguments = ", ".join(f"{name}={value!r}" for name, value in method_signature.bind(*args, **kwargs).arguments.items())
+                pre_message = f"> {method.__name__}({method_arguments})"
+            else:
+                pre_message = f"> {method.__name__}()"
+            Logging.logger.write(pre_message)
+
+            Logging.logger.up()
+            result = OPTION.from_nullable(
+                method(*args, **kwargs) if is_takes_any_parameters == True else method()
+            )
+            Logging.logger.down()
+
+            if ConfigLoader.config.logging.is_update_view_every_logging: 
+                update_view()
 
             post_message = result.match(
                 none = lambda: f"< {method.__name__} -> None", 
@@ -270,7 +322,7 @@ class Logging:
         time_written = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
         indentation = ""
         for i in range(stack_depth):
-            indentation += Logging.tab()
+            indentation += "." + Logging.tab()
         log_message = f"{time_written}: {indentation}{message}"
         
         with open(ConfigLoader.get_log_file_full_path(), "a") as f:
@@ -352,10 +404,25 @@ class BlenderEX:
 
     @staticmethod
     @Logging.logged_method
+    def iter_hierarchy_exclusive(obj):
+        """iter_hierarchy_exclusive(obj): yields all children of obj, but not obj itself"""
+        yield obj
+        for child in obj.children:
+            yield from BlenderEX.iter_hierarchy_inclusive(child)
+
+    @staticmethod
+    @Logging.logged_method
     def move_to_collection(obj, target_collection):
         for col in obj.users_collection:
             col.objects.unlink(obj)
         target_collection.objects.link(obj)
+
+    @staticmethod
+    @Logging.logged_method
+    def parent_to_other_object(obj, target_object):
+        while obj.parent:
+            obj.parent = None
+        target_object.objects.link(obj)
 
     @staticmethod
     @Logging.logged_method
@@ -574,18 +641,42 @@ def run_export_pipline_for_rig(rig):
     BlenderEX.move_to_collection_with_nierarchy(rig, temporal_export_collection)
 
 
-    # create game rig  ------------------------------------------------
+    # create game rig ------------------------------------------------
+    gtr_global_settings = bpy.context.scene.GRT_Action_Bakery_Global_Settings
+    Logging.logger.write(f"scn.GRT_Action_Bakery_Global_Settings:\n{Utils.recirsive_to_string(gtr_global_settings)}\n")
+    gtr_action_bakery = bpy.context.scene.GRT_Action_Bakery
+    Logging.logger.write(f"scn.GRT_Action_Bakery:\n{Utils.recirsive_to_string(gtr_action_bakery)}\n")
+
+    gtr_global_settings.Source_Armature = rig
+    Logging.logger.write(f"Source_Armature {rig.name}")
+
+    game_rig = bpy.data.objects[rig.name + "_deform"]
+    gtr_global_settings.Target_Armature = game_rig
+    Logging.logger.write(f"Target_Armature {game_rig.name}")
+
+    bpy.ops.gamerigtool.generate_game_rig(Use_Regenerate_Rig=True, Use_Legacy=False)
+
+    rig = game_rig
+    
+    # game_rig_name = "Object"
+    # game_rig = bpy.data.objects[game_rig_name]
+    # game_rig.name = f"{rig.name}_deform"
+    # Logging.logger.write(f"Rig deform {game_rig.name}")
+
+    # Utils.map_action(
+    #     BlenderEX.iter_hierarchy_inclusive(rig), 
+    #     lambda a: BlenderEX.parent_to_other_object(a, game_rig) if a.type == "MESH" else None
+    # )
+
+
 
 
 
     # processing meshes and exporting to unreal ------------------------------------------------
     meshes = []
 
-    @Logging.logged_method
+    @Logging.logged_method_hight
     def filter_meshes():
-
-        Logging.logger.up()
-
         for obj in temporal_export_collection.all_objects:
             # only for geometry
             if not (
@@ -599,40 +690,38 @@ def run_export_pipline_for_rig(rig):
 
             meshes.append(obj)
             Logging.logger.write(f"{obj.name}")
-
-        Logging.logger.down()
-    
     filter_meshes()
 
 
+    @Logging.logged_method_hight
+    def export_rig():
+        for obj in meshes:
+            BlenderEX.force_select_object(obj)
+
+            # Make single user and apply visual transform
+            bpy.ops.object.make_single_user(object=True, obdata=True)
+            bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 
 
-    for obj in meshes:
-        BlenderEX.force_select_object(obj)
-
-        # Make single user and apply visual transform
-        bpy.ops.object.make_single_user(object=True, obdata=True)
-        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+            # apply_render_geometry_modifiers_pass(obj)
 
 
-        # apply_render_geometry_modifiers_pass(obj)
+            bpy.ops.object.visual_transform_apply()
+            Logging.logger.write(f"Made single user and applied visual transform to {obj.name}")
 
 
-        bpy.ops.object.visual_transform_apply()
-        Logging.logger.write(f"Made single user and applied visual transform to {obj.name}")
+            fix_object_normal_pass(obj)
 
+            # create_micro_bone_pass(obj, rig)
+            
+            obj.data.name = f"{obj.name}__unique_mesh"
+            Logging.logger.write(f"Renamed object data to {obj.data.name}")
 
-        fix_object_normal_pass(obj)
+            obj.select_set(False)
+            BlenderEX.deselect_everything()
 
-        # create_micro_bone_pass(obj, rig)
-        
-        obj.data.name = f"{obj.name}__unique_mesh"
-        Logging.logger.write(f"Renamed object data to {obj.data.name}")
-
-        obj.select_set(False)
-        BlenderEX.deselect_everything()
-
-        Logging.logger.write(f"Finished for {obj.name}")
+            Logging.logger.write(f"Finished for {obj.name}")
+        export_rig()
 
 
 
@@ -686,12 +775,10 @@ def run_export_pipline_for_rig(rig):
 
 
 
-
+@Logging.logged_method
 def main():
     # Save the current Blender file
     bpy.ops.wm.save_mainfile()
-
-    Logging.clear_log_file()
 
     Logging.logger.write("Saved the current Blender file")
 
@@ -714,4 +801,5 @@ def main():
         bpy.ops.wm.revert_mainfile()
 
 
+Logging.clear_log_file()
 main()
