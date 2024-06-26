@@ -1,6 +1,7 @@
 import datetime
 from functools import wraps
 import inspect
+import os
 import traceback
 import bpy
 import json
@@ -159,7 +160,8 @@ class ConfigLoader:
     "logging": {
         "tab_size": 3,
         "this_file_name": "export_to_ue__custom_pipline.py",
-        "log_file_name": "export_to_ue__custom_pipline.log"
+        "log_file_name": "export_to_ue__custom_pipline.log",
+        "log_file_path": "Y://___Projects___//PTTR.SP - Patternolitsadiya Shum for portfolio//300 Art"
     },
     "passes": {
         "fix_normals": {
@@ -179,6 +181,10 @@ class ConfigLoader:
     }
 }
     """
+
+    @staticmethod
+    def get_log_file_full_path():
+        return os.path.join(ConfigLoader.config.logging.log_file_path, ConfigLoader.config.logging.log_file_name)
 
     @staticmethod
     def load_config():
@@ -221,69 +227,76 @@ class Logging:
         method_signature = inspect.signature(method)
         is_takes_any_parameters = len(method_signature.parameters) > 0
 
-        def both(*args, **kwargs):
+        def update_view():
+            bpy.context.view_layer.update()
+            bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
+
+        def two_lined(*args, **kwargs):
             Logging.logger.up()
             if is_takes_any_parameters:
                 method_arguments = ", ".join(f"{name}={value!r}" for name, value in method_signature.bind(*args, **kwargs).arguments.items())
-                pre_message = f"{method.__name__} started with arguments: {method_arguments}"
+                pre_message = f"> {method.__name__}({method_arguments})"
             else:
-                pre_message = f"{method.__name__} started without arguments"
+                pre_message = f"> {method.__name__}()"
             Logging.logger.write(pre_message)
 
             result = OPTION.from_nullable(
                 method(*args, **kwargs) if is_takes_any_parameters == True else method()
             )
 
+            update_view()
+
             post_message = result.match(
-                none = lambda: f"{method.__name__} finished without result", 
-                some = lambda x: f"{method.__name__} finished with result: {x!r}")
+                none = lambda: f"< {method.__name__} -> None", 
+                some = lambda x: f"< {method.__name__} -> {x!r}")
             Logging.logger.write(post_message)
             Logging.logger.down()
 
             return result.match(none=lambda: None, some=lambda x: x)
         
-        return both # is good)
+        return two_lined # is good)
     
     @staticmethod
-    def tab():
+    def tab() -> str:
         return " " * ConfigLoader.config.logging.tab_size
     
     @staticmethod
     def clear_log_file():
-        with open(ConfigLoader.config.logging.log_file_name, "w") as _:
+        with open(ConfigLoader.get_log_file_full_path(), "w") as f:
             pass
 
     @staticmethod
     def log_to_file(message, stack_depth=0):
         time_written = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-        # stack_depth = len(traceback.extract_stack()) - 1 - 10
-        indentation = Logging.tab() * min(stack_depth, 1)
+        indentation = ""
+        for i in range(stack_depth):
+            indentation += Logging.tab()
         log_message = f"{time_written}: {indentation}{message}"
         
-        with open(ConfigLoader.config.logging.log_file_name, "a") as f:
+        with open(ConfigLoader.get_log_file_full_path(), "a") as f:
             f.write(f"{log_message}\n")
 
     @final
     class LoggerMonad:
         def __init__(self, log_file_name):
             self.log_file_name = log_file_name
-            self.current_intent = 0
+            self.depth = 0
 
-        @Decorating.returns_self
+        # @Decorating.returns_self
         def clear_log_file(self):
             Logging.clear_log_file()
 
-        @Decorating.returns_self
-        def write(self, message):
-            Logging.log_to_file(message, self.current_intent)
+        # @Decorating.returns_self
+        def write(self, message:str):
+            Logging.log_to_file(message, self.depth)
         
         @Decorating.returns_self 
         def up(self):
-            self.current_intent += 1
+            self.depth += 1
         
         @Decorating.returns_self    
         def down(self):
-            self.current_intent -= 1
+            self.depth -= 1
 
     # shared instance of logger for this file
     logger = LoggerMonad(ConfigLoader.config.logging.log_file_name)
@@ -429,7 +442,6 @@ class BlenderEX:
 def fix_object_normal_pass(obj):
     if ConfigLoader.config.passes.fix_normals.attribute_name not in obj.keys() or obj[ConfigLoader.config.passes.fix_normals.attribute_name] is False:
         fix_object_normals(obj)
-        BlenderEX.update_view_print(f"Normals fixed for {obj.name}")
         
 @Logging.logged_method
 def fix_object_normals(obj):
@@ -489,10 +501,8 @@ def create_micro_bone_pass(obj, rig):
         name = obj[mb_cnf.micro_bone_name]
 
     bone = add_bone_to_armature(rig, name, obj.location, obj.location, parent_bone)
-    BlenderEX.update_view_print(f"Created micro bone {bone.name} for {obj.name}")
 
     fill_object_with_vertex_weight(obj, bone.name, 1)
-    BlenderEX.update_view_print(f"Filled vertex weight for {obj.name}")
 
     pass
 
@@ -500,7 +510,6 @@ def create_micro_bone_pass(obj, rig):
 def apply_render_geometry_modifiers_pass(obj):
     if ConfigLoader.config.passes.apply_render_geometry_modifiers.enabled:
         apply_render_geometry_modifiers(obj)
-        BlenderEX.update_view_print(f"{Logging.tab()}Applied render modifiers to {obj.name}")
 
 @Logging.logged_method
 def apply_render_geometry_modifiers(obj):
@@ -556,16 +565,13 @@ def apply_render_geometry_modifiers(obj):
 
 @Logging.logged_method
 def run_export_pipline_for_rig(rig):
-    BlenderEX.update_view_print(f"Exporting for {rig.name} started")
 
     original_collection_of_the_rig = rig.users_collection[0]
     temporal_export_collection = bpy.data.collections.new(name="Export")
     bpy.context.scene.collection.children.link(temporal_export_collection)
-    BlenderEX.update_view_print(f"Created collection {temporal_export_collection.name}")
 
     # add rig and its childs to the "Export" collection
     BlenderEX.move_to_collection_with_nierarchy(rig, temporal_export_collection)
-    BlenderEX.update_view_print(f"Hierarchy of {rig.name} moved to {temporal_export_collection.name}")
 
 
     # create game rig  ------------------------------------------------
@@ -573,30 +579,36 @@ def run_export_pipline_for_rig(rig):
 
 
     # processing meshes and exporting to unreal ------------------------------------------------
-
     meshes = []
-    BlenderEX.update_view_print(f"Collecting meshes of {rig.name}:")
-    for obj in temporal_export_collection.all_objects:
-        # only for geometry
-        if not (
-            obj is not None
-            and hasattr(obj, 'type') 
-            and obj.type is not None 
-            and obj.type == "MESH"
-        ):
-            BlenderEX.update_view_print(f"{Logging.tab()}Skipped {obj.name if obj else 'deez nust'}")
-            continue
 
-        meshes.append(obj)
-        BlenderEX.update_view_print(f"{Logging.tab()}{obj.name}")
+    @Logging.logged_method
+    def filter_meshes():
+
+        Logging.logger.up()
+
+        for obj in temporal_export_collection.all_objects:
+            # only for geometry
+            if not (
+                obj is not None
+                and hasattr(obj, 'type') 
+                and obj.type is not None 
+                and obj.type == "MESH"
+            ):
+                Logging.logger.write(f"Skipped {obj.name if obj else 'deez nust'}")
+                continue
+
+            meshes.append(obj)
+            Logging.logger.write(f"{obj.name}")
+
+        Logging.logger.down()
+    
+    filter_meshes()
 
 
 
 
     for obj in meshes:
         BlenderEX.force_select_object(obj)
-
-        BlenderEX.update_view_print(f"Selected {obj.name}")
 
         # Make single user and apply visual transform
         bpy.ops.object.make_single_user(object=True, obdata=True)
@@ -607,35 +619,34 @@ def run_export_pipline_for_rig(rig):
 
 
         bpy.ops.object.visual_transform_apply()
-        BlenderEX.update_view_print(f"{Logging.tab()}Made single user and applied visual transform to {obj.name}")
+        Logging.logger.write(f"Made single user and applied visual transform to {obj.name}")
 
 
         fix_object_normal_pass(obj)
 
         # create_micro_bone_pass(obj, rig)
-
         
         obj.data.name = f"{obj.name}__unique_mesh"
-        BlenderEX.update_view_print(f"{Logging.tab()}Renamed object data to {obj.data.name}")
+        Logging.logger.write(f"Renamed object data to {obj.data.name}")
 
         obj.select_set(False)
         BlenderEX.deselect_everything()
 
-        BlenderEX.update_view_print(f"{Logging.tab()}Finished for {obj.name}")
+        Logging.logger.write(f"Finished for {obj.name}")
 
 
 
     # Send to Unreal Engine all things from the "Export" collection
     if ConfigLoader.config.main.is_export_to_ue:
-        BlenderEX.update_view_print(f"Sending to Unreal started")
+        Logging.logger.write(f"Sending to Unreal started")
         bpy.ops.wm.send2ue()
-        BlenderEX.update_view_print(f"Sending to Unreal finished")
+        Logging.logger.write(f"Sending to Unreal finished")
 
     # delete the "Export" collection
     bpy.data.collections.remove(temporal_export_collection)
     BlenderEX.move_to_collection_with_nierarchy(rig, original_collection_of_the_rig)
-    BlenderEX.update_view_print(f"Moved {rig.name} to {original_collection_of_the_rig.name}")
-    BlenderEX.update_view_print(f"Exported rig and its childs {rig.name} finished")
+    Logging.logger.write(f"Moved {rig.name} to {original_collection_of_the_rig.name}")
+    Logging.logger.write(f"Exported rig and its childs {rig.name} finished")
 
     pass
 
@@ -680,11 +691,9 @@ def main():
     # Save the current Blender file
     bpy.ops.wm.save_mainfile()
 
-    # Logging.clear_log_file()
-    with open("export_to_ue__custom_pipline.log", "a") as f:
-        f.write("test log message lol")
+    Logging.clear_log_file()
 
-    BlenderEX.update_view_print("Saved the current Blender file")
+    Logging.logger.write("Saved the current Blender file")
 
     BlenderEX.deselect_everything()
 
@@ -697,16 +706,12 @@ def main():
     for rig in rigs_to_export:
         run_export_pipline_for_rig(rig)
 
-    BlenderEX.update_view_print(f"All rigs exported")
-    BlenderEX.update_view_print(f"SCRIPT FINISHED")
+    Logging.logger.write(f"All rigs exported")
+    Logging.logger.write(f"SCRIPT FINISHED")
 
     # Revert all changes to the Blender file
     if ConfigLoader.config.main.is_revert_changes:
         bpy.ops.wm.revert_mainfile()
 
-
-
-with open("export_to_ue__custom_pipline.txt", "a") as f:
-    f.write("test log message\n")
 
 main()
