@@ -5,6 +5,7 @@ import traceback
 import bpy
 import json
 from types import SimpleNamespace
+from typing import TypeVar, Generic, Callable, Optional
 from typing import *
 
 
@@ -65,6 +66,59 @@ class Decorating:
 
 
 
+A = TypeVar("A")
+@final
+class Option(Generic[A]): # wheel reinvented))))
+    def __init__(self, is_some, value:A):
+        self._is_some = is_some
+        self._value = value
+    
+    @property
+    def is_none(self) -> bool:
+        return not self._is_some
+    
+    @property
+    def is_some(self) -> bool:
+        return self._is_some
+    
+    def unwrap(self) -> A:
+        return self._value
+    
+    def match(self, none = lambda: None, some = lambda x: x):
+        if self.is_some:
+            return some(self._value)
+        else:
+            return none()
+    
+    def switch(self, none = lambda: None, some = lambda x: x) -> None:
+        if self.is_some:
+            some(self._value)
+        else:
+            none()
+
+@final
+class OPTION:
+    @staticmethod
+    def none() -> Option[None]:
+        return Option(False, None)
+    
+    @staticmethod
+    def some(value: A) -> Option[A]:
+        return Option(True, value)
+    
+    @staticmethod
+    def from_nullable(value: Optional[A]) -> Option[Optional[A]]:
+        if value is None:
+            return OPTION.none()
+        else:
+            return OPTION.some(value)
+        
+    @staticmethod
+    def from_emptyable_collection(value: Optional[A]) -> Option[Optional[A]]:
+        if value is None or len(value) == 0:
+            return OPTION.none()
+        else:
+            return OPTION.some(value)
 
 
 
@@ -94,6 +148,7 @@ class Decorating:
 
 
 # ConfigLoader.py
+@final
 class ConfigLoader:
     config_file_json = """
 {
@@ -104,7 +159,7 @@ class ConfigLoader:
     "logging": {
         "tab_size": 3,
         "this_file_name": "ExporterScript.py",
-        "log_file_name": "ExporterScript.py.log"
+        "log_file_name": "ExporterScript.log"
     },
     "passes": {
         "fix_normals": {
@@ -125,17 +180,14 @@ class ConfigLoader:
 }
     """
 
-    @staticmethod
-    def load_config():
-        config_dict = json.loads(ConfigLoader.config_file_json)
+    @classmethod
+    def _load_config(cls):
+        config_dict = json.loads(cls.config_file_json)
+        obj = json.loads(json.dumps(config_dict), object_hook=lambda a: SimpleNamespace(**a))
+        return obj
 
-        def dict_to_namespace(d):
-            return json.loads(json.dumps(d), object_hook=lambda d: SimpleNamespace(**d))
-        
-        return dict_to_namespace(config_dict)
-
-    # shared instance of logger for this file
-    config = load_config()
+# Initialize the config
+ConfigLoader.config = ConfigLoader._load_config()
 
 
 
@@ -161,28 +213,36 @@ class ConfigLoader:
 
 
 
-
-
+# Logging.py
+@final
 class Logging:
     @staticmethod
-    def logged_method(is_wrapped=True):
-        def decorator(method):
-            @wraps(method)
-            def wrapper(self, *args, **kwargs):
-                Logging.logger().up()
-                method_arguments = ", ".join(inspect.getfullargspec(method).args)
-                Logging.logger().write(f"{method.__name__} started " + method_arguments)
+    def logged_method(method):
+        method_signature = inspect.signature(method)
+        is_takes_any_parameters = len(method_signature.parameters) > 0
 
-                result = method(self, *args, **kwargs)
+        def both(*args, **kwargs):
+            Logging.logger.up()
+            if is_takes_any_parameters:
+                method_arguments = ", ".join(f"{name}={value!r}" for name, value in method_signature.bind(*args, **kwargs).arguments.items())
+                pre_message = f"{method.__name__} started with arguments: {method_arguments}"
+            else:
+                pre_message = f"{method.__name__} started without arguments"
+            Logging.logger.write(pre_message)
 
-                if is_wrapped:
-                    Logging.logger().write(f"{method.__name__} finished")
+            result = OPTION.from_nullable(
+                method(*args, **kwargs) if is_takes_any_parameters == True else method()
+            )
 
-                Logging.logger().down()
+            post_message = result.match(
+                none = lambda: f"{method.__name__} finished without result", 
+                some = lambda x: f"{method.__name__} finished with result: {x!r}")
+            Logging.logger.write(post_message)
+            Logging.logger.down()
 
-                return result if result is not None else self  # Ensure self is returned if method returns None
-            return wrapper
-        return decorator
+            return result.match(none=lambda: None, some=lambda x: x)
+        
+        return both # is good)
     
     @staticmethod
     def tab():
@@ -190,7 +250,7 @@ class Logging:
     
     @staticmethod
     def clear_log_file():
-        with open(ConfigLoader.config.logging.log_file_name, "w") as f:
+        with open(ConfigLoader.config.logging.log_file_name, "w") as _:
             pass
 
     @staticmethod
@@ -203,27 +263,15 @@ class Logging:
         with open(ConfigLoader.config.logging.log_file_name, "a") as f:
             f.write(f"{log_message}\n")
 
-
+    @final
     class LoggerMonad:
         def __init__(self, log_file_name):
             self.log_file_name = log_file_name
             self.current_intent = 0
 
-        @property
-        def current_intent(self):
-            return self._current_intent
-        
-        @property
-        def current_intent(self, level):
-            self._current_intent = level
-        
-        @property
-        def log_file_name(self):
-            return self.log_file_name
-
         @Decorating.returns_self
         def clear_log_file(self):
-            Logging.cLoggingear_log_file()
+            Logging.clear_log_file()
 
         @Decorating.returns_self
         def write(self, message):
@@ -273,31 +321,31 @@ class Logging:
 # BlenderEX.py
 class BlenderEX:
     @staticmethod
-    @Logging.logged_method()
+    @Logging.logged_method
     def get_root_bone_of_armature(armature):
         return armature.data.edit_bones[armature.data.edit_bones.keys()[0]]
 
     @staticmethod
-    @Logging.logged_method()
+    @Logging.logged_method
     def deselect_everything():
         bpy.ops.object.select_all(action='DESELECT')
 
     @staticmethod
-    @Logging.logged_method()
+    @Logging.logged_method
     def iter_hierarchy_inclusive(obj):
         yield obj
         for child in obj.children:
             yield from BlenderEX.iter_hierarchy_inclusive(child)
 
     @staticmethod
-    @Logging.logged_method()
+    @Logging.logged_method
     def move_to_collection(obj, target_collection):
         for col in obj.users_collection:
             col.objects.unlink(obj)
         target_collection.objects.link(obj)
 
     @staticmethod
-    @Logging.logged_method()
+    @Logging.logged_method
     def move_to_collection_with_nierarchy(obj, target_collection):
         Utils.map_action(
             BlenderEX.iter_hierarchy_inclusive(obj), 
@@ -305,13 +353,13 @@ class BlenderEX:
         )
 
     @staticmethod
-    @Logging.logged_method()
+    @Logging.logged_method
     def update_view():
         bpy.context.view_layer.update()
         bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
 
     @staticmethod
-    @Logging.logged_method()
+    # @Logging.logged_method
     def update_view_print(message):
         BlenderEX.update_view()
         print(message)
@@ -319,7 +367,7 @@ class BlenderEX:
 
     # Select the object. I SAD: SELECT THE OBJECT
     @staticmethod
-    @Logging.logged_method()
+    @Logging.logged_method
     def force_select_object(obj):
         if obj.name in bpy.context.view_layer.objects:
             obj.select_set(True)
@@ -377,13 +425,13 @@ class BlenderEX:
 
 
 # passes ------------------------------------------------------------------
-@Logging.logged_method()
+@Logging.logged_method
 def fix_object_normal_pass(obj):
     if ConfigLoader.config.passes.fix_normals.attribute_name not in obj.keys() or obj[ConfigLoader.config.passes.fix_normals.attribute_name] is False:
         fix_object_normals(obj)
         BlenderEX.update_view_print(f"Normals fixed for {obj.name}")
         
-@Logging.logged_method()
+@Logging.logged_method
 def fix_object_normals(obj):
     BlenderEX.force_select_object(obj)
     bpy.ops.object.mode_set(mode='EDIT')
@@ -394,7 +442,7 @@ def fix_object_normals(obj):
 
 
 
-@Logging.logged_method()
+@Logging.logged_method
 def add_bone_to_armature(armature, bone_name="Bone.001", head=(0, 0, 0), tail=(0, 0, 1), parent_bone=None):
     bpy.context.view_layer.objects.active = armature
     bpy.ops.object.mode_set(mode='EDIT')
@@ -412,7 +460,7 @@ def add_bone_to_armature(armature, bone_name="Bone.001", head=(0, 0, 0), tail=(0
 
     return new_bone
 
-@Logging.logged_method()
+@Logging.logged_method
 def fill_object_with_vertex_weight(obj, bone_name, weight=1):
     bpy.context.view_layer.objects.active = obj
     bpy.ops.object.mode_set(mode='OBJECT')
@@ -420,14 +468,14 @@ def fill_object_with_vertex_weight(obj, bone_name, weight=1):
     vertex_indices = [v.index for v in obj.data.vertices]
     vertex_group.add(vertex_indices, weight, 'REPLACE')
 
-@Logging.logged_method()
+@Logging.logged_method
 def has_armature_modifier(obj):
     for mod in obj.modifiers:
         if mod.type == 'ARMATURE':
             return True
     return False
 
-@Logging.logged_method()
+@Logging.logged_method
 def create_micro_bone_pass(obj, rig):
     mb_cnf = ConfigLoader.config.passes.create_micro_bone
 
@@ -448,13 +496,13 @@ def create_micro_bone_pass(obj, rig):
 
     pass
 
-@Logging.logged_method()
+@Logging.logged_method
 def apply_render_geometry_modifiers_pass(obj):
     if ConfigLoader.config.passes.apply_render_geometry_modifiers.enabled:
         apply_render_geometry_modifiers(obj)
         BlenderEX.update_view_print(f"{Logging.tab()}Applied render modifiers to {obj.name}")
 
-@Logging.logged_method()
+@Logging.logged_method
 def apply_render_geometry_modifiers(obj):
     if obj.modifiers:
         for modifier in obj.modifiers:
@@ -506,7 +554,7 @@ def apply_render_geometry_modifiers(obj):
 
 
 
-@Logging.logged_method()
+@Logging.logged_method
 def run_export_pipline_for_rig(rig):
     BlenderEX.update_view_print(f"Exporting for {rig.name} started")
 
@@ -628,7 +676,6 @@ def run_export_pipline_for_rig(rig):
 
 
 
-@Logging.logged_method()
 def main():
     # Save the current Blender file
     bpy.ops.wm.save_mainfile()
