@@ -158,8 +158,8 @@ class ConfigLoader:
     },
     "logging": {
         "tab_size": 3,
-        "this_file_name": "ExporterScript.py",
-        "log_file_name": "ExporterScript.log"
+        "this_file_name": "export_to_ue__custom_pipline.py",
+        "log_file_name": "export_to_ue__custom_pipline.log"
     },
     "passes": {
         "fix_normals": {
@@ -180,14 +180,14 @@ class ConfigLoader:
 }
     """
 
-    @classmethod
-    def _load_config(cls):
-        config_dict = json.loads(cls.config_file_json)
+    @staticmethod
+    def load_config():
+        config_dict = json.loads(ConfigLoader.config_file_json)
         obj = json.loads(json.dumps(config_dict), object_hook=lambda a: SimpleNamespace(**a))
         return obj
 
 # Initialize the config
-ConfigLoader.config = ConfigLoader._load_config()
+ConfigLoader.config = ConfigLoader.load_config()
 
 
 
@@ -257,7 +257,7 @@ class Logging:
     def log_to_file(message, stack_depth=0):
         time_written = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
         # stack_depth = len(traceback.extract_stack()) - 1 - 10
-        indentation = Logging.tab() * stack_depth
+        indentation = Logging.tab() * min(stack_depth, 1)
         log_message = f"{time_written}: {indentation}{message}"
         
         with open(ConfigLoader.config.logging.log_file_name, "a") as f:
@@ -680,7 +680,9 @@ def main():
     # Save the current Blender file
     bpy.ops.wm.save_mainfile()
 
-    Logging.clear_log_file()
+    # Logging.clear_log_file()
+    with open("export_to_ue__custom_pipline.log", "a") as f:
+        f.write("test log message lol")
 
     BlenderEX.update_view_print("Saved the current Blender file")
 
@@ -704,5 +706,7 @@ def main():
 
 
 
+with open("export_to_ue__custom_pipline.txt", "a") as f:
+    f.write("test log message\n")
 
 main()
