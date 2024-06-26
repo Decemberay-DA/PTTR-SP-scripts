@@ -1,4 +1,5 @@
 import datetime
+from functools import wraps
 import inspect
 import traceback
 import bpy
@@ -133,7 +134,8 @@ class ConfigLoader:
         
         return dict_to_namespace(config_dict)
 
-config = ConfigLoader.load_config()
+    # shared instance of logger for this file
+    config = load_config()
 
 
 
@@ -163,37 +165,42 @@ config = ConfigLoader.load_config()
 
 class Logging:
     @staticmethod
-    def logged_method(method, is_wrapped=False):
-        def wrapper(self, *args, **kwargs):
+    def logged_method(is_wrapped=True):
+        def decorator(method):
+            @wraps(method)
+            def wrapper(self, *args, **kwargs):
+                Logging.logger().up()
+                method_arguments = ", ".join(inspect.getfullargspec(method).args)
+                Logging.logger().write(f"{method.__name__} started " + method_arguments)
 
-            Logging.logger.up()
-            method_arguments = ", ".join(inspect.getfullargspec(method).args)
-            Logging.logger.write(f"{method.__name__} started " + method_arguments)
+                result = method(self, *args, **kwargs)
 
-            method(self, *args, **kwargs)
+                if is_wrapped:
+                    Logging.logger().write(f"{method.__name__} finished")
 
-            if is_wrapped:
-                Logging.logger.write(f"{method.__name__} finished")
+                Logging.logger().down()
 
-            Logging.logger.down()
-
-            return self
-        return wrapper
-
+                return result if result is not None else self  # Ensure self is returned if method returns None
+            return wrapper
+        return decorator
+    
+    @staticmethod
     def tab():
-        return " " * config.logging.tab_size
-
+        return " " * ConfigLoader.config.logging.tab_size
+    
+    @staticmethod
     def clear_log_file():
-        with open(config.logging.log_file_name, "w") as f:
+        with open(ConfigLoader.config.logging.log_file_name, "w") as f:
             pass
 
-    def log_to_file(message):
+    @staticmethod
+    def log_to_file(message, stack_depth=0):
         time_written = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-        stack_depth = len(traceback.extract_stack()) - 1 - 10
+        # stack_depth = len(traceback.extract_stack()) - 1 - 10
         indentation = Logging.tab() * stack_depth
         log_message = f"{time_written}: {indentation}{message}"
         
-        with open(config.logging.log_file_name, "a") as f:
+        with open(ConfigLoader.config.logging.log_file_name, "a") as f:
             f.write(f"{log_message}\n")
 
 
@@ -220,7 +227,7 @@ class Logging:
 
         @Decorating.returns_self
         def write(self, message):
-            Logging.log_to_file(message)
+            Logging.log_to_file(message, self.current_intent)
         
         @Decorating.returns_self 
         def up(self):
@@ -231,7 +238,7 @@ class Logging:
             self.current_intent -= 1
 
     # shared instance of logger for this file
-    logger = LoggerMonad(config.logging.log_file_name)
+    logger = LoggerMonad(ConfigLoader.config.logging.log_file_name)
 
 
 
@@ -266,31 +273,31 @@ class Logging:
 # BlenderEX.py
 class BlenderEX:
     @staticmethod
-    @Logging.logged_method
+    @Logging.logged_method()
     def get_root_bone_of_armature(armature):
         return armature.data.edit_bones[armature.data.edit_bones.keys()[0]]
 
     @staticmethod
-    @Logging.logged_method
+    @Logging.logged_method()
     def deselect_everything():
         bpy.ops.object.select_all(action='DESELECT')
 
     @staticmethod
-    @Logging.logged_method
+    @Logging.logged_method()
     def iter_hierarchy_inclusive(obj):
         yield obj
         for child in obj.children:
             yield from BlenderEX.iter_hierarchy_inclusive(child)
 
     @staticmethod
-    @Logging.logged_method
+    @Logging.logged_method()
     def move_to_collection(obj, target_collection):
         for col in obj.users_collection:
             col.objects.unlink(obj)
         target_collection.objects.link(obj)
 
     @staticmethod
-    @Logging.logged_method
+    @Logging.logged_method()
     def move_to_collection_with_nierarchy(obj, target_collection):
         Utils.map_action(
             BlenderEX.iter_hierarchy_inclusive(obj), 
@@ -298,12 +305,13 @@ class BlenderEX:
         )
 
     @staticmethod
-    @Logging.logged_method
+    @Logging.logged_method()
     def update_view():
         bpy.context.view_layer.update()
         bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
 
     @staticmethod
+    @Logging.logged_method()
     def update_view_print(message):
         BlenderEX.update_view()
         print(message)
@@ -311,6 +319,7 @@ class BlenderEX:
 
     # Select the object. I SAD: SELECT THE OBJECT
     @staticmethod
+    @Logging.logged_method()
     def force_select_object(obj):
         if obj.name in bpy.context.view_layer.objects:
             obj.select_set(True)
@@ -368,12 +377,13 @@ class BlenderEX:
 
 
 # passes ------------------------------------------------------------------
-
+@Logging.logged_method()
 def fix_object_normal_pass(obj):
-    if config.passes.fix_normals.attribute_name not in obj.keys() or obj[config.passes.fix_normals.attribute_name] is False:
+    if ConfigLoader.config.passes.fix_normals.attribute_name not in obj.keys() or obj[ConfigLoader.config.passes.fix_normals.attribute_name] is False:
         fix_object_normals(obj)
         BlenderEX.update_view_print(f"Normals fixed for {obj.name}")
-
+        
+@Logging.logged_method()
 def fix_object_normals(obj):
     BlenderEX.force_select_object(obj)
     bpy.ops.object.mode_set(mode='EDIT')
@@ -384,6 +394,7 @@ def fix_object_normals(obj):
 
 
 
+@Logging.logged_method()
 def add_bone_to_armature(armature, bone_name="Bone.001", head=(0, 0, 0), tail=(0, 0, 1), parent_bone=None):
     bpy.context.view_layer.objects.active = armature
     bpy.ops.object.mode_set(mode='EDIT')
@@ -401,6 +412,7 @@ def add_bone_to_armature(armature, bone_name="Bone.001", head=(0, 0, 0), tail=(0
 
     return new_bone
 
+@Logging.logged_method()
 def fill_object_with_vertex_weight(obj, bone_name, weight=1):
     bpy.context.view_layer.objects.active = obj
     bpy.ops.object.mode_set(mode='OBJECT')
@@ -408,14 +420,16 @@ def fill_object_with_vertex_weight(obj, bone_name, weight=1):
     vertex_indices = [v.index for v in obj.data.vertices]
     vertex_group.add(vertex_indices, weight, 'REPLACE')
 
+@Logging.logged_method()
 def has_armature_modifier(obj):
     for mod in obj.modifiers:
         if mod.type == 'ARMATURE':
             return True
     return False
 
+@Logging.logged_method()
 def create_micro_bone_pass(obj, rig):
-    mb_cnf = config.passes.create_micro_bone
+    mb_cnf = ConfigLoader.config.passes.create_micro_bone
 
 
     parent_bone = None
@@ -434,11 +448,13 @@ def create_micro_bone_pass(obj, rig):
 
     pass
 
+@Logging.logged_method()
 def apply_render_geometry_modifiers_pass(obj):
-    if config.passes.apply_render_geometry_modifiers.enabled:
+    if ConfigLoader.config.passes.apply_render_geometry_modifiers.enabled:
         apply_render_geometry_modifiers(obj)
         BlenderEX.update_view_print(f"{Logging.tab()}Applied render modifiers to {obj.name}")
 
+@Logging.logged_method()
 def apply_render_geometry_modifiers(obj):
     if obj.modifiers:
         for modifier in obj.modifiers:
@@ -490,6 +506,7 @@ def apply_render_geometry_modifiers(obj):
 
 
 
+@Logging.logged_method()
 def run_export_pipline_for_rig(rig):
     BlenderEX.update_view_print(f"Exporting for {rig.name} started")
 
@@ -561,7 +578,7 @@ def run_export_pipline_for_rig(rig):
 
 
     # Send to Unreal Engine all things from the "Export" collection
-    if config.main.is_export_to_ue:
+    if ConfigLoader.config.main.is_export_to_ue:
         BlenderEX.update_view_print(f"Sending to Unreal started")
         bpy.ops.wm.send2ue()
         BlenderEX.update_view_print(f"Sending to Unreal finished")
@@ -611,6 +628,7 @@ def run_export_pipline_for_rig(rig):
 
 
 
+@Logging.logged_method()
 def main():
     # Save the current Blender file
     bpy.ops.wm.save_mainfile()
@@ -627,7 +645,6 @@ def main():
             bpy.data.objects["shum_control_rig"]
         ]
 
-
     for rig in rigs_to_export:
         run_export_pipline_for_rig(rig)
 
@@ -635,7 +652,7 @@ def main():
     BlenderEX.update_view_print(f"SCRIPT FINISHED")
 
     # Revert all changes to the Blender file
-    if config.main.is_revert_changes:
+    if ConfigLoader.config.main.is_revert_changes:
         bpy.ops.wm.revert_mainfile()
 
 
