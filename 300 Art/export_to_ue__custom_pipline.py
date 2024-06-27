@@ -434,7 +434,7 @@ class Logging:
 # whole god damn it Game_Rig_Tools-221_B35_B36/ folder in here cz i dont give a shit on how to call operator with presets that i need)))))))0
 @final
 class GRT_Generate_Game_Rig:
-    _operator_settings_dict = {
+    operator_settings = SimpleNamespace(**{
         # additional
         "Hierarchy_Mode" : 'RIGIFY',
         "Use_Legacy" : False,
@@ -462,9 +462,7 @@ class GRT_Generate_Game_Rig:
         "Remove_Custom_Properties": True,
         "Remove_Animation_Data": True,
         "Show_Advanced": False
-    }
-
-    operator_settings = SimpleNamespace(**_operator_settings_dict)
+    })
 
     @staticmethod
     @Logging.logged_method
@@ -483,7 +481,29 @@ class GRT_Generate_Game_Rig:
         
     @staticmethod
     @Logging.logged_method
+    def invoke(presets, context):
+        scn = context.scene
+        Global_Settings = scn.GRT_Action_Bakery_Global_Settings
+        # Action_Bakery = scn.GRT_Action_Bakery
+
+        control_rig = Global_Settings.Source_Armature
+        deform_rig = Global_Settings.Target_Armature
+
+        if deform_rig:
+            presets.Deform_Armature_Name = deform_rig.name
+        elif control_rig:
+            presets.Deform_Armature_Name = control_rig.name + "_deform"
+
+
+    @staticmethod
+    @Logging.logged_method
     def execute(operator_presets, context):
+            
+            GRT_Generate_Game_Rig.invoke(
+                GRT_Generate_Game_Rig.operator_settings,
+                bpy.context
+            )
+
             object = context.object
 
             scn = context.scene
