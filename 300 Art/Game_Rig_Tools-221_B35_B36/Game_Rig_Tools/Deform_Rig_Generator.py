@@ -99,37 +99,26 @@ class GRT_Generate_Game_Rig(bpy.types.Operator):
     Rigify_Hierarchy_Fix: bpy.props.BoolProperty(default=False)
 #    RIGIFY_Disable_Stretch: bpy.props.BoolProperty(default=True)
 
+    # calls invoke props dialogue
     def invoke(self, context, event):
-
         scn = context.scene
         Global_Settings = scn.GRT_Action_Bakery_Global_Settings
-        Action_Bakery = scn.GRT_Action_Bakery
+        # Action_Bakery = scn.GRT_Action_Bakery
 
         control_rig = Global_Settings.Source_Armature
         deform_rig = Global_Settings.Target_Armature
-    
 
         if deform_rig:
             self.Deform_Armature_Name = deform_rig.name
         elif control_rig:
             self.Deform_Armature_Name = control_rig.name + "_deform"
 
-
-
         return context.window_manager.invoke_props_dialog(self)
 
-
+    # draws the props dialogue
     def draw(self, context):
-
-
-
         layout = self.layout
-
         scn = context.scene
-
-        
-
-
 
         scn = context.scene
         Global_Settings = scn.GRT_Action_Bakery_Global_Settings
@@ -137,8 +126,6 @@ class GRT_Generate_Game_Rig(bpy.types.Operator):
 
         control_rig = Global_Settings.Source_Armature
         deform_rig = Global_Settings.Target_Armature
-
-
 
         if Utility.draw_subpanel(self, self.SUB_Generation_Settings, "SUB_Generation_Settings", "Generation Settings", layout):
             box = layout.box()
@@ -255,7 +242,7 @@ class GRT_Generate_Game_Rig(bpy.types.Operator):
             box.separator()
 #        layout.prop(self, "RIGIFY_Disable_Stretch", text="Disable Rigify Stretch")
 
-
+    # executes operator using presets from context.scene and self.**props
     def execute(self, context):
 
         object = context.object
