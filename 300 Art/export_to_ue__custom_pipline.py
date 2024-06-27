@@ -284,14 +284,18 @@ ConfigLoader.config = ConfigLoader.load_config()
 # Logging.py
 @final
 class Logging:
+
+    @staticmethod
+    def update_view():
+        bpy.context.view_layer.update()
+        bpy.ops.wm.redraw_timer(type="DRAW_WIN_SWAP", iterations=1)
+
     @staticmethod
     def logged_method(method):
         method_signature = inspect.signature(method)
         is_takes_any_parameters = len(method_signature.parameters) > 0
 
-        def update_view():
-            bpy.context.view_layer.update()
-            bpy.ops.wm.redraw_timer(type="DRAW_WIN_SWAP", iterations=1)
+        Logging.update_view()
 
         def two_lined(*args, **kwargs):
             Logging.logger.up()
@@ -307,7 +311,7 @@ class Logging:
             )
 
             if ConfigLoader.config.logging.is_update_view_every_logging: 
-                update_view()
+                Logging.update_view()
 
             post_message = result.match(
                 none = lambda: f"< {method.__name__} -> None", 
@@ -524,235 +528,241 @@ class GRT_Generate_Game_Rig:
                 operator_presets.Flat_Hierarchy = True
                 
 
+            Logging.update_view()
+
 
             if not operator_presets.Use_Legacy:
                 object = control_rig
 
 
-            if object:
+            if not object: return
 
-                if object.type == "ARMATURE":
+            if object.type != "ARMATURE": return
 
-                    bpy.ops.object.mode_set(mode = "OBJECT")
+            bpy.ops.object.mode_set(mode = "OBJECT")
 
-                    ORI_Edit_Bones = object.data.bones
+            ORI_Edit_Bones = object.data.bones
 
-                    for bone in ORI_Edit_Bones:
+            for bone in ORI_Edit_Bones:
 
-                        if operator_presets.Animator_Remove_BBone:
-                            bone.bbone_segments = 0
-
-
-                    game_rig = None
-
-                    if not operator_presets.Use_Legacy:
-                        if operator_presets.Use_Regenerate_Rig:
-                            game_rig = deform_rig
-                            game_rig.hide_set(False)
-                            game_rig.hide_viewport = False
-
-                    if not game_rig:
-                        game_rig = object.copy()
-                        game_rig.name = operator_presets.Deform_Armature_Name
-                        if not operator_presets.Use_Legacy:
-                            Global_Settings.Target_Armature = game_rig
-
-                    game_rig.display_type = "SOLID"
-                    game_rig.show_in_front = True
-                    game_rig.data = object.data.copy()
-
-                    if not bpy.context.collection.objects.get(game_rig.name):
-
-                        bpy.context.collection.objects.link(game_rig)
-
-                    bpy.ops.object.select_all(action="DESELECT")
-                    game_rig.select_set(True)
-                    context.view_layer.objects.active = game_rig
-                    bpy.ops.object.mode_set(mode = "EDIT")
-
-                    Edit_Bones = game_rig.data.edit_bones
-
-                    if operator_presets.Rigify_Hierarchy_Fix:
-                        for bone in Edit_Bones:
+                if operator_presets.Animator_Remove_BBone:
+                    bone.bbone_segments = 0
 
 
-                            if bone.use_deform:
-                                if bone.parent:
-                                    if not bone.parent.use_deform:
-                                        recursive_parent = bone.parent_recursive
-                                        
-                                        for f in recursive_parent:
-                                            
-                                            if f.use_deform:
-                                                bone.parent = f
-                                                break
-                                            else:
-                                                b = GRT_Generate_Game_Rig.find_deform(f, Edit_Bones)
-                                                if b:
-                                                    if not b.name == bone.name:
-                                                        if b.use_deform:
-                                                            bone.parent = b
-                                                            break
+            game_rig = None
 
+            if not operator_presets.Use_Legacy:
+                if operator_presets.Use_Regenerate_Rig:
+                    game_rig = deform_rig
+                    game_rig.hide_set(False)
+                    game_rig.hide_viewport = False
 
-                    if operator_presets.Remove_Animation_Data:
+            if not game_rig:
+                game_rig = object.copy()
+                game_rig.name = operator_presets.Deform_Armature_Name
+                if not operator_presets.Use_Legacy:
+                    Global_Settings.Target_Armature = game_rig
 
-                        game_rig.animation_data_clear()
-                        game_rig.data.animation_data_clear()
+            game_rig.display_type = "SOLID"
+            game_rig.show_in_front = True
+            game_rig.data = object.data.copy()
+
+            if not bpy.context.collection.objects.get(game_rig.name):
+
+                bpy.context.collection.objects.link(game_rig)
+
+            bpy.ops.object.select_all(action="DESELECT")
+            game_rig.select_set(True)
+            context.view_layer.objects.active = game_rig
+            bpy.ops.object.mode_set(mode = "EDIT")
+
+            Edit_Bones = game_rig.data.edit_bones
+
+            if operator_presets.Rigify_Hierarchy_Fix:
+                # @Logging.logged_method
+                def apply_Rigify_Hierarchy_Fix(bone):
+                    if bone.use_deform:
+                        if bone.parent:
+                            if not bone.parent.use_deform:
+                                recursive_parent = bone.parent_recursive
+                                
+                                for f in recursive_parent:
+                                    
+                                    if f.use_deform:
+                                        bone.parent = f
+                                        break
+                                    else:
+                                        b = GRT_Generate_Game_Rig.find_deform(f, Edit_Bones)
+                                        if b:
+                                            if not b.name == bone.name:
+                                                if b.use_deform:
+                                                    bone.parent = b
+                                                    break
+                for bone in Edit_Bones:
+                    apply_Rigify_Hierarchy_Fix(bone)
+
+            if operator_presets.Remove_Animation_Data:
+
+                game_rig.animation_data_clear()
+                game_rig.data.animation_data_clear()
+
+            if operator_presets.Deform_Move_Bone_to_Layer1:
+                for i, layer in enumerate(game_rig.data.layers):
+                    if i == 0:
+                        game_rig.data.layers[i] = True
+                    else:
+                        game_rig.data.layers[i] = False
+
+            # @Logging.logged_method
+            def process_bone(bone):
+
+                    if operator_presets.Flat_Hierarchy:
+                        bone.parent = None
+                    if operator_presets.Disconnect_Bone:
+                        bone.use_connect = False
+
+                    if operator_presets.Remove_Custom_Properties:
+                        bone.id_properties_clear()
+                        # if bone.get("_RNA_UI"):
+                        #     for property in bone["_RNA_UI"]:
+                        #         del bone[property]
+
+                    if operator_presets.Deform_Remove_BBone:
+                        bone.bbone_segments = 0
+
+                    if operator_presets.Deform_Set_Inherit_Rotation_True:
+                        bone.use_inherit_rotation = True
+
+                    if operator_presets.Deform_Set_Local_Location_True:
+                        bone.use_local_location = True
+
+                    if operator_presets.Deform_Set_Inherit_Scale_Full:
+                        bone.inherit_scale = "FULL"
 
                     if operator_presets.Deform_Move_Bone_to_Layer1:
-                        for i, layer in enumerate(game_rig.data.layers):
+                        for i, layer in enumerate(bone.layers):
                             if i == 0:
-                                game_rig.data.layers[i] = True
+                                bone.layers[i] = True
                             else:
-                                game_rig.data.layers[i] = False
+                                bone.layers[i] = False
 
-                    for bone in Edit_Bones:
+                    if operator_presets.Deform_Remove_Non_Deform_Bone:
+                        if operator_presets.Extract_Mode == "SELECTED":
+                            if not bone.select:
+                                Edit_Bones.remove(bone)
 
-                        if operator_presets.Flat_Hierarchy:
-                            bone.parent = None
-                        if operator_presets.Disconnect_Bone:
-                            bone.use_connect = False
+                        if operator_presets.Extract_Mode == "DEFORM":
+                            if not bone.use_deform:
+                                Edit_Bones.remove(bone)
 
-                        if operator_presets.Remove_Custom_Properties:
-                            bone.id_properties_clear()
-                            # if bone.get("_RNA_UI"):
-                            #     for property in bone["_RNA_UI"]:
-                            #         del bone[property]
-
-                        if operator_presets.Deform_Remove_BBone:
-                            bone.bbone_segments = 0
-
-                        if operator_presets.Deform_Set_Inherit_Rotation_True:
-                            bone.use_inherit_rotation = True
-
-                        if operator_presets.Deform_Set_Local_Location_True:
-                            bone.use_local_location = True
-
-                        if operator_presets.Deform_Set_Inherit_Scale_Full:
-                            bone.inherit_scale = "FULL"
-
-                        if operator_presets.Deform_Move_Bone_to_Layer1:
-                            for i, layer in enumerate(bone.layers):
-                                if i == 0:
-                                    bone.layers[i] = True
-                                else:
-                                    bone.layers[i] = False
-
-                        if operator_presets.Deform_Remove_Non_Deform_Bone:
-                            if operator_presets.Extract_Mode == "SELECTED":
-                                if not bone.select:
-                                    Edit_Bones.remove(bone)
-
-                            if operator_presets.Extract_Mode == "DEFORM":
+                        if operator_presets.Extract_Mode == "SELECTED_DEFORM":
+                            if not bone.select:
                                 if not bone.use_deform:
                                     Edit_Bones.remove(bone)
 
-                            if operator_presets.Extract_Mode == "SELECTED_DEFORM":
-                                if not bone.select:
-                                    if not bone.use_deform:
-                                        Edit_Bones.remove(bone)
+                        if operator_presets.Extract_Mode == "DEFORM_AND_SELECTED":
+                            if not bone.use_deform and not bone.select:
+                                Edit_Bones.remove(bone)
+            for bone in Edit_Bones:
+                process_bone(bone)
 
-                            if operator_presets.Extract_Mode == "DEFORM_AND_SELECTED":
-                                if not bone.use_deform and not bone.select:
-                                    Edit_Bones.remove(bone)
+            bpy.ops.object.mode_set(mode = "POSE")
+            game_rig.data.bones.update()
 
+            if operator_presets.Remove_Custom_Properties:
+                # if game_rig.get("_RNA_UI"):
+                #     for property in game_rig["_RNA_UI"]:
+                #         del game_rig[property]
 
-                    bpy.ops.object.mode_set(mode = "POSE")
-                    game_rig.data.bones.update()
+                game_rig.id_properties_clear()
+                game_rig.data.id_properties_clear()
+                # if game_rig.data.get("_RNA_UI"):
+                #     for property in game_rig.data["_RNA_UI"]:
+                #         del game_rig.data[property]
 
-                    if operator_presets.Remove_Custom_Properties:
-                        # if game_rig.get("_RNA_UI"):
-                        #     for property in game_rig["_RNA_UI"]:
-                        #         del game_rig[property]
+            Pose_Bones = game_rig.pose.bones
 
-                        game_rig.id_properties_clear()
-                        game_rig.data.id_properties_clear()
-                        # if game_rig.data.get("_RNA_UI"):
-                        #     for property in game_rig.data["_RNA_UI"]:
-                        #         del game_rig.data[property]
+            # @Logging.logged_method
+            def process_pose_bone(bone):
+                if operator_presets.Remove_Custom_Properties:
+                    if bone.get("_RNA_UI"):
+                        for property in bone["_RNA_UI"]:
+                            del bone[property]
 
-                    Pose_Bones = game_rig.pose.bones
+                if operator_presets.Deform_Remove_Shape:
+                    bone.custom_shape = None
 
-                    for bone in Pose_Bones:
+                if operator_presets.Deform_Unlock_Transform:
+                    bone.lock_location[0] = False
+                    bone.lock_location[1] = False
+                    bone.lock_location[2] = False
 
-                        if operator_presets.Remove_Custom_Properties:
-                            if bone.get("_RNA_UI"):
-                                for property in bone["_RNA_UI"]:
-                                    del bone[property]
+                    bone.lock_scale[0] = False
+                    bone.lock_scale[1] = False
+                    bone.lock_scale[2] = False
 
-                        if operator_presets.Deform_Remove_Shape:
-                            bone.custom_shape = None
+                    bone.lock_rotation_w = False
+                    bone.lock_rotation[0] = False
+                    bone.lock_rotation[1] = False
+                    bone.lock_rotation[2] = False
 
-                        if operator_presets.Deform_Unlock_Transform:
-                            bone.lock_location[0] = False
-                            bone.lock_location[1] = False
-                            bone.lock_location[2] = False
+                if operator_presets.Deform_Remove_All_Constraints:
+                    for constraint in bone.constraints:
+                        bone.constraints.remove(constraint)
 
-                            bone.lock_scale[0] = False
-                            bone.lock_scale[1] = False
-                            bone.lock_scale[2] = False
+                # if self.Deform_Copy_Transform:
 
-                            bone.lock_rotation_w = False
-                            bone.lock_rotation[0] = False
-                            bone.lock_rotation[1] = False
-                            bone.lock_rotation[2] = False
+                if operator_presets.Constraint_Type == "TRANSFORM":
+                    constraint = bone.constraints.new("COPY_TRANSFORMS")
+                    constraint.target = object
+                    constraint.subtarget = object.data.bones.get(bone.name).name
 
-                        if operator_presets.Deform_Remove_All_Constraints:
-                            for constraint in bone.constraints:
-                                bone.constraints.remove(constraint)
+                if operator_presets.Constraint_Type == "LOTROT":
+                    constraint = bone.constraints.new("COPY_LOCATION")
+                    constraint.target = object
+                    constraint.subtarget = object.data.bones.get(bone.name).name
 
-                        # if self.Deform_Copy_Transform:
+                    constraint = bone.constraints.new("COPY_ROTATION")
+                    constraint.target = object
+                    constraint.subtarget = object.data.bones.get(bone.name).name
 
-                        if operator_presets.Constraint_Type == "TRANSFORM":
-                            constraint = bone.constraints.new("COPY_TRANSFORMS")
+                    if operator_presets.Copy_Root_Scale:
+
+                        root = None
+
+                        if operator_presets.Auto_Find_Root:
+                            root = GRT_Generate_Game_Rig.get_root(object.data.bones.get(bone.name))
+                        else:
+                            root = object.data.bones.get(operator_presets.Root_Bone_Name)
+
+    
+                        if root:
+                            constraint = bone.constraints.new("COPY_SCALE")
                             constraint.target = object
-                            constraint.subtarget = object.data.bones.get(bone.name).name
-
-                        if operator_presets.Constraint_Type == "LOTROT":
-                            constraint = bone.constraints.new("COPY_LOCATION")
-                            constraint.target = object
-                            constraint.subtarget = object.data.bones.get(bone.name).name
-
-                            constraint = bone.constraints.new("COPY_ROTATION")
-                            constraint.target = object
-                            constraint.subtarget = object.data.bones.get(bone.name).name
-
-                            if operator_presets.Copy_Root_Scale:
-
-                                root = None
-
-                                if operator_presets.Auto_Find_Root:
-                                    root = GRT_Generate_Game_Rig.get_root(object.data.bones.get(bone.name))
-                                else:
-                                    root = object.data.bones.get(operator_presets.Root_Bone_Name)
-
-            
-                                if root:
-                                    constraint = bone.constraints.new("COPY_SCALE")
-                                    constraint.target = object
-                                    constraint.subtarget = root.name
+                            constraint.subtarget = root.name
 
 
-                        if operator_presets.Constraint_Type == "NONE":
-                            pass
+                if operator_presets.Constraint_Type == "NONE":
+                    pass
+            for bone in Pose_Bones:
+                process_pose_bone(bone)
 
 
-                    bpy.ops.object.mode_set(mode = "OBJECT")
-                    if operator_presets.Deform_Bind_to_Deform_Rig:
-                        for obj in bpy.data.objects:
-                            for modifier in obj.modifiers:
-                                if modifier.type == "ARMATURE":
-                                    if modifier.object == object:
-                                        modifier.object = game_rig
-                                        if operator_presets.Parent_To_Deform_Rig:
-                                            obj.parent = game_rig
-                                            obj.matrix_parent_inverse = game_rig.matrix_world.inverted()
+            bpy.ops.object.mode_set(mode = "OBJECT")
+            if operator_presets.Deform_Bind_to_Deform_Rig:
+                for obj in bpy.data.objects:
+                    for modifier in obj.modifiers:
+                        if modifier.type == "ARMATURE":
+                            if modifier.object == object:
+                                modifier.object = game_rig
+                                if operator_presets.Parent_To_Deform_Rig:
+                                    obj.parent = game_rig
+                                    obj.matrix_parent_inverse = game_rig.matrix_world.inverted()
 
-                for bone in object.data.bones:
-                    if operator_presets.Animator_Disable_Deform:
+            for bone in object.data.bones:
+                if operator_presets.Animator_Disable_Deform:
 
-                        bone.use_deform = False
+                    bone.use_deform = False
 
 
 
@@ -1098,67 +1108,67 @@ def run_export_pipline_for_rig(rig):
 
 
 
-    # processing meshes and exporting to unreal ------------------------------------------------
-    meshes = []
+    # # processing meshes and exporting to unreal ------------------------------------------------
+    # meshes = []
 
-    @Logging.logged_method_hight
-    def filter_meshes():
-        for obj in temporal_export_collection.all_objects:
-            # only for geometry
-            if not (
-                obj is not None
-                and hasattr(obj, "type") 
-                and obj.type is not None 
-                and obj.type == "MESH"
-            ):
-                Logging.logger.write(f"Skipped {obj.name if obj else 'deez nust'}")
-                continue
+    # @Logging.logged_method_hight
+    # def filter_meshes():
+    #     for obj in temporal_export_collection.all_objects:
+    #         # only for geometry
+    #         if not (
+    #             obj is not None
+    #             and hasattr(obj, "type") 
+    #             and obj.type is not None 
+    #             and obj.type == "MESH"
+    #         ):
+    #             Logging.logger.write(f"Skipped {obj.name if obj else 'deez nust'}")
+    #             continue
 
-            meshes.append(obj)
-            Logging.logger.write(f"{obj.name}")
-    filter_meshes()
-
-
-    @Logging.logged_method_hight
-    def export_rig():
-        for obj in meshes:
-            BlenderEX.force_select_object(obj)
-
-            # Make single user and apply visual transform
-            bpy.ops.object.make_single_user(object=True, obdata=True)
-            bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    #         meshes.append(obj)
+    #         Logging.logger.write(f"{obj.name}")
+    # filter_meshes()
 
 
-            bpy.ops.object.visual_transform_apply()
-            Logging.logger.write(f"Made single user and applied visual transform to {obj.name}")
+    # @Logging.logged_method_hight
+    # def export_rig():
+    #     for obj in meshes:
+    #         BlenderEX.force_select_object(obj)
+
+    #         # Make single user and apply visual transform
+    #         bpy.ops.object.make_single_user(object=True, obdata=True)
+    #         bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 
 
-            fix_object_normal_pass(obj)
+    #         bpy.ops.object.visual_transform_apply()
+    #         Logging.logger.write(f"Made single user and applied visual transform to {obj.name}")
 
-            # create_micro_bone_pass(obj, rig)
+
+    #         fix_object_normal_pass(obj)
+
+    #         # create_micro_bone_pass(obj, rig)
             
-            obj.data.name = f"{obj.name}__unique_mesh"
-            Logging.logger.write(f"Renamed object data to {obj.data.name}")
+    #         obj.data.name = f"{obj.name}__unique_mesh"
+    #         Logging.logger.write(f"Renamed object data to {obj.data.name}")
 
-            obj.select_set(False)
-            BlenderEX.deselect_everything()
+    #         obj.select_set(False)
+    #         BlenderEX.deselect_everything()
 
-            Logging.logger.write(f"Finished for {obj.name}")
-    export_rig()
+    #         Logging.logger.write(f"Finished for {obj.name}")
+    # export_rig()
 
 
 
-    # Send to Unreal Engine all things from the "Export" collection
-    if ConfigLoader.config.main.is_export_to_ue:
-        Logging.logger.write(f"Sending to Unreal started")
-        bpy.ops.wm.send2ue()
-        Logging.logger.write(f"Sending to Unreal finished")
+    # # Send to Unreal Engine all things from the "Export" collection
+    # if ConfigLoader.config.main.is_export_to_ue:
+    #     Logging.logger.write(f"Sending to Unreal started")
+    #     bpy.ops.wm.send2ue()
+    #     Logging.logger.write(f"Sending to Unreal finished")
 
-    # delete the "Export" collection
-    bpy.data.collections.remove(temporal_export_collection)
-    BlenderEX.move_to_collection_with_nierarchy(rig, original_collection_of_the_rig)
-    Logging.logger.write(f"Moved {rig.name} to {original_collection_of_the_rig.name}")
-    Logging.logger.write(f"Exported rig and its childs {rig.name} finished")
+    # # delete the "Export" collection
+    # bpy.data.collections.remove(temporal_export_collection)
+    # BlenderEX.move_to_collection_with_nierarchy(rig, original_collection_of_the_rig)
+    # Logging.logger.write(f"Moved {rig.name} to {original_collection_of_the_rig.name}")
+    # Logging.logger.write(f"Exported rig and its childs {rig.name} finished")
 
     pass
 
