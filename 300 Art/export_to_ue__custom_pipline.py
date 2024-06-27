@@ -438,7 +438,7 @@ class Logging:
 # whole god damn it Game_Rig_Tools-221_B35_B36/ folder in here cz i dont give a shit on how to call operator with presets that i need)))))))0
 @final
 class GRT_Generate_Game_Rig:
-    operator_settings = SimpleNamespace(**{
+    preset = SimpleNamespace(**{
         # additional
         "Hierarchy_Mode" : 'RIGIFY',
         "Use_Legacy" : False,
@@ -504,7 +504,7 @@ class GRT_Generate_Game_Rig:
     def execute(operator_presets, context):
             
             GRT_Generate_Game_Rig.invoke(
-                GRT_Generate_Game_Rig.operator_settings,
+                GRT_Generate_Game_Rig.preset,
                 bpy.context
             )
 
@@ -864,19 +864,16 @@ class BlenderEX:
         )
 
     @staticmethod
-    @Logging.logged_method
     def update_view():
         bpy.context.view_layer.update()
         bpy.ops.wm.redraw_timer(type="DRAW_WIN_SWAP", iterations=1)
 
     @staticmethod
-    # @Logging.logged_method
     def update_view_print(message):
         BlenderEX.update_view()
         print(message)
         Logging.log_to_file(message)
 
-    # Select the object. I SAD: SELECT THE OBJECT
     @staticmethod
     @Logging.logged_method
     def force_select_object(obj):
@@ -936,88 +933,98 @@ class BlenderEX:
 
 
 # passes ------------------------------------------------------------------
-@Logging.logged_method
-def fix_object_normal_pass(obj):
-    if ConfigLoader.config.passes.fix_normals.attribute_name not in obj.keys() or obj[ConfigLoader.config.passes.fix_normals.attribute_name] is False:
-        fix_object_normals(obj)
-        
-@Logging.logged_method
-def fix_object_normals(obj):
-    BlenderEX.force_select_object(obj)
-    bpy.ops.object.mode_set(mode="EDIT")
-    bpy.ops.mesh.select_all(action="SELECT")
-    bpy.ops.mesh.normals_make_consistent(inside=False)
-    bpy.ops.mesh.select_all(action="DESELECT")
-    bpy.ops.object.mode_set(mode="OBJECT")
+@final
+class Passes:
+    @Logging.logged_method
+    @staticmethod
+    def fix_object_normal_pass(obj):
+        if ConfigLoader.config.passes.fix_normals.attribute_name not in obj.keys() or obj[ConfigLoader.config.passes.fix_normals.attribute_name] is False:
+            Passes.fix_object_normals(obj)
+            
+    @Logging.logged_method
+    @staticmethod
+    def fix_object_normals(obj):
+        BlenderEX.force_select_object(obj)
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.mesh.select_all(action="SELECT")
+        bpy.ops.mesh.normals_make_consistent(inside=False)
+        bpy.ops.mesh.select_all(action="DESELECT")
+        bpy.ops.object.mode_set(mode="OBJECT")
 
 
 
-@Logging.logged_method
-def add_bone_to_armature(armature, bone_name="Bone.001", head=(0, 0, 0), tail=(0, 0, 1), parent_bone=None):
-    bpy.context.view_layer.objects.active = armature
-    bpy.ops.object.mode_set(mode="EDIT")
+    @Logging.logged_method
+    @staticmethod
+    def add_bone_to_armature(armature, bone_name="Bone.001", head=(0, 0, 0), tail=(0, 0, 1), parent_bone=None):
+        bpy.context.view_layer.objects.active = armature
+        bpy.ops.object.mode_set(mode="EDIT")
 
-    new_bone = armature.data.edit_bones.new(bone_name)
-    new_bone.head = head
-    new_bone.tail = tail
+        new_bone = armature.data.edit_bones.new(bone_name)
+        new_bone.head = head
+        new_bone.tail = tail
 
-    if parent_bone is not None:
-        new_bone.parent = parent_bone
-    else:
-        new_bone.parent = BlenderEX.get_root_bone_of_armature(armature)
+        if parent_bone is not None:
+            new_bone.parent = parent_bone
+        else:
+            new_bone.parent = BlenderEX.get_root_bone_of_armature(armature)
 
-    bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.ops.object.mode_set(mode="OBJECT")
 
-    return new_bone
+        return new_bone
 
-@Logging.logged_method
-def fill_object_with_vertex_weight(obj, bone_name, weight=1):
-    bpy.context.view_layer.objects.active = obj
-    bpy.ops.object.mode_set(mode="OBJECT")
-    vertex_group = obj.vertex_groups.new(name=bone_name)
-    vertex_indices = [v.index for v in obj.data.vertices]
-    vertex_group.add(vertex_indices, weight, "REPLACE")
+    @Logging.logged_method
+    @staticmethod
+    def fill_object_with_vertex_weight(obj, bone_name, weight=1):
+        bpy.context.view_layer.objects.active = obj
+        bpy.ops.object.mode_set(mode="OBJECT")
+        vertex_group = obj.vertex_groups.new(name=bone_name)
+        vertex_indices = [v.index for v in obj.data.vertices]
+        vertex_group.add(vertex_indices, weight, "REPLACE")
 
-@Logging.logged_method
-def has_armature_modifier(obj):
-    for mod in obj.modifiers:
-        if mod.type == "ARMATURE":
-            return True
-    return False
+    @Logging.logged_method
+    @staticmethod
+    def has_armature_modifier(obj):
+        for mod in obj.modifiers:
+            if mod.type == "ARMATURE":
+                return True
+        return False
 
-@Logging.logged_method
-def create_micro_bone_pass(obj, rig):
-    mb_cnf = ConfigLoader.config.passes.create_micro_bone
+    @Logging.logged_method
+    @staticmethod
+    def create_micro_bone_pass(obj, rig):
+        mb_cnf = ConfigLoader.config.passes.create_micro_bone
 
 
-    parent_bone = None
-    if mb_cnf.micro_bone_parent in obj.keys():
-        parent_bone = rig.data.edit_bones[obj[mb_cnf.micro_bone_parent]]
+        parent_bone = None
+        if mb_cnf.micro_bone_parent in obj.keys():
+            parent_bone = rig.data.edit_bones[obj[mb_cnf.micro_bone_parent]]
 
-    name = f"{obj.name}__micro_bone"
-    if mb_cnf.micro_bone_name in obj.keys():
-        name = obj[mb_cnf.micro_bone_name]
+        name = f"{obj.name}__micro_bone"
+        if mb_cnf.micro_bone_name in obj.keys():
+            name = obj[mb_cnf.micro_bone_name]
 
-    bone = add_bone_to_armature(rig, name, obj.location, obj.location, parent_bone)
+        bone = Passes.add_bone_to_armature(rig, name, obj.location, obj.location, parent_bone)
 
-    fill_object_with_vertex_weight(obj, bone.name, 1)
+        Passes.fill_object_with_vertex_weight(obj, bone.name, 1)
 
-    pass
+        pass
 
-@Logging.logged_method
-def apply_render_geometry_modifiers_pass(obj):
-    if ConfigLoader.config.passes.apply_render_geometry_modifiers.enabled:
-        apply_render_geometry_modifiers(obj)
+    @Logging.logged_method
+    @staticmethod
+    def apply_render_geometry_modifiers_pass(obj):
+        if ConfigLoader.config.passes.apply_render_geometry_modifiers.enabled:
+            Passes.apply_render_geometry_modifiers(obj)
 
-@Logging.logged_method
-def apply_render_geometry_modifiers(obj):
-    if obj.modifiers:
-        for modifier in obj.modifiers:
-            if modifier.show_render:
-                bpy.context.view_layer.objects.active = obj
-                bpy.ops.object.modifier_apply(modifier=modifier.name)
-            else:
-                print(f"Skipping modifier '{modifier.name}' (cz not enabled for render)")
+    @Logging.logged_method
+    @staticmethod
+    def apply_render_geometry_modifiers(obj):
+        if obj.modifiers:
+            for modifier in obj.modifiers:
+                if modifier.show_render:
+                    bpy.context.view_layer.objects.active = obj
+                    bpy.ops.object.modifier_apply(modifier=modifier.name)
+                else:
+                    print(f"Skipping modifier '{modifier.name}' (cz not enabled for render)")
 
 
 
@@ -1081,26 +1088,16 @@ def run_export_pipline_for_rig(rig):
     gtr_global_settings.Source_Armature = rig
     Logging.logger.write(f"Source_Armature {rig.name}")
 
-    # game_rig = bpy.data.objects[rig.name + "_deform"]
-    # gtr_global_settings.Target_Armature = game_rig
-    # Logging.logger.write(f"Target_Armature {game_rig.name}")
 
-
-
-
-
-
-
-
-
-
+    # create game rig
     GRT_Generate_Game_Rig.execute(
-        GRT_Generate_Game_Rig.operator_settings, 
+        GRT_Generate_Game_Rig.preset, 
         bpy.context
     )
 
 
 
+    # bake actions to game rig ------------------------------------------------
 
 
 
