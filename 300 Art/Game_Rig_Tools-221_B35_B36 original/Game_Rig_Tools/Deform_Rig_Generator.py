@@ -99,7 +99,148 @@ class GRT_Generate_Game_Rig(bpy.types.Operator):
     Rigify_Hierarchy_Fix: bpy.props.BoolProperty(default=False)
 #    RIGIFY_Disable_Stretch: bpy.props.BoolProperty(default=True)
 
+    # calls invoke props dialogue
+    def invoke(self, context, event):
+        scn = context.scene
+        Global_Settings = scn.GRT_Action_Bakery_Global_Settings
+        # Action_Bakery = scn.GRT_Action_Bakery
 
+        control_rig = Global_Settings.Source_Armature
+        deform_rig = Global_Settings.Target_Armature
+
+        if deform_rig:
+            self.Deform_Armature_Name = deform_rig.name
+        elif control_rig:
+            self.Deform_Armature_Name = control_rig.name + "_deform"
+
+        return context.window_manager.invoke_props_dialog(self)
+
+    # draws the props dialogue
+    def draw(self, context):
+        layout = self.layout
+        scn = context.scene
+
+        scn = context.scene
+        Global_Settings = scn.GRT_Action_Bakery_Global_Settings
+        Action_Bakery = scn.GRT_Action_Bakery
+
+        control_rig = Global_Settings.Source_Armature
+        deform_rig = Global_Settings.Target_Armature
+
+        if Utility.draw_subpanel(self, self.SUB_Generation_Settings, "SUB_Generation_Settings", "Generation Settings", layout):
+            box = layout.box()
+            box.separator()
+
+            if self.Use_Regenerate_Rig:
+
+                box.prop(Global_Settings,"Target_Armature", text="Game Rig", icon="ARMATURE_DATA")
+
+
+            else:
+                box.prop(self, "Deform_Armature_Name", text="Name")
+
+            if not self.Use_Legacy:
+                box.prop(self, "Use_Regenerate_Rig", text="Regenerate Rig", icon="FILE_REFRESH")
+            box.separator()
+
+        layout.separator()
+
+        if Utility.draw_subpanel(self, self.SUB_Hierarchy_Settings, "SUB_Hierarchy_Settings", "Hierarchy Settings", layout):
+            box = layout.box()
+            box.separator()
+        #layout.separator()
+            #box.label(text="Hierarchy Mode")
+            box.prop(self, "Hierarchy_Mode", text="")
+            #layout.prop(self, "Rigify_Hierarchy_Fix", text="Rigify Hierarchy Fix (FOR RIGIFY ONLY)")
+            #layout.prop(self, "Flat_Hierarchy", text="Flat Hierarchy")
+            box.prop(self, "Disconnect_Bone", text="Disconnect Bones")
+            box.separator()
+        layout.separator()
+
+        if Utility.draw_subpanel(self, self.SUB_Constraints_Settings, "SUB_Constraints_Settings", "Constraints Settings", layout):
+            box = layout.box()
+            box.separator()
+            #box.label(text="Constraint Type:")
+
+            box.prop(self, "Constraint_Type", text="")
+            if self.Constraint_Type == "LOTROT":
+                box.prop(self, "Copy_Root_Scale", text="Copy Root Scale")
+                if self.Copy_Root_Scale:
+                    box.prop(self, "Auto_Find_Root", text="Auto Find Root")
+                    if not self.Auto_Find_Root:
+                        box.label(text="Root Bone Name")
+                        row = box.row(align=True)
+                        if self.Root_Bone_Picker:
+                            row.prop_search(self, "Root_Bone_Name", control_rig.data, "bones", text="")
+    
+                        else:
+                            row.prop(self, "Root_Bone_Name", text="")
+                        row.prop(self, "Root_Bone_Picker", text="", icon="EYEDROPPER")
+            box.separator()
+        layout.separator()
+        if Utility.draw_subpanel(self, self.SUB_Extract_Settings, "SUB_Extract_Settings", "Extract Settings", layout):
+            box = layout.box()
+            box.separator()
+            #box.label(text="Extract Mode:")
+            box.prop(self, "Extract_Mode", text="")
+
+            box.separator()
+        layout.separator()
+
+        if Utility.draw_subpanel(self, self.SUB_Binding_Settings, "SUB_Binding_Settings", "Binding Settings", layout):
+            box = layout.box()
+            box.separator()
+            box.prop(self, "Deform_Bind_to_Deform_Rig", text="Bind to Game Rig")
+
+            if self.Deform_Bind_to_Deform_Rig:
+                box.prop(self, "Parent_To_Deform_Rig", text="Parent Mesh Object to Game Rig")
+            box.separator()
+
+
+
+        layout.separator()
+
+        if Utility.draw_subpanel(self, self.Show_Advanced, "Show_Advanced", "Advanced", layout):
+
+
+
+
+
+            box = layout.box()
+            box.separator()
+            box.label(text="Control Rig")
+            box.prop(self, "Animator_Remove_BBone", text="Remove BBone")
+
+
+            box.separator()
+
+            box.label(text="Game Rig")
+            box.prop(self, "Deform_Remove_BBone", text="Remove BBone")
+            box.prop(self, "Deform_Move_Bone_to_Layer1", text="Move Bones to Layer 1")
+
+            box.prop(self, "Deform_Set_Inherit_Rotation_True", text="Set Inherit Rotation True")
+            box.prop(self, "Deform_Set_Inherit_Scale_Full", text="Set Inherit Scale Full")
+            box.prop(self, "Deform_Set_Local_Location_True", text="Set Local Location Bone Setting True")
+
+            box.prop(self, "Deform_Remove_Non_Deform_Bone", text="Remove Non Deform / Non Selected Bones")
+
+            box.prop(self, "Deform_Unlock_Transform", text="Unlock Transform")
+            box.prop(self, "Deform_Remove_Shape", text="Remove Bone Shapes")
+            box.prop(self, "Deform_Remove_All_Constraints", text="Remove Constraints")
+
+
+            # layout.prop(self, "Deform_Copy_Transform", text="Constrain Deform Rig to Animation Rig")
+
+
+
+            # layout.prop(self, "Deform_Bind_to_Deform_Rig", text="Bind to Deform Rig")
+            # if self.Deform_Bind_to_Deform_Rig:
+            #     layout.prop(self, "Parent_To_Deform_Rig", text="Parent Mesh Object to Deform Rig")
+
+            box.prop(self, "Remove_Animation_Data", text="Remove Animation Data & Drivers")
+            box.prop(self, "Remove_Custom_Properties", text="Remove Custom Properties")
+            box.separator()
+#        layout.prop(self, "RIGIFY_Disable_Stretch", text="Disable Rigify Stretch")
 
     # executes operator using presets from context.scene and self.**props
     def execute(self, context):
@@ -387,6 +528,48 @@ class GRT_Generate_Game_Rig(bpy.types.Operator):
 
         return {'FINISHED'}
 
+def draw_item(self, context):
+
+    layout = self.layout
+    row = layout.row(align=True)
+
+    addon_preferences = context.preferences.addons[addon_name].preferences
+
+    if addon_preferences.toogle_constraints:
+        if context.mode == "POSE":
+
+            operator = row.operator("gamerigtool.toogle_constraint", text="Mute")
+            operator.mute = True
+            operator.use_selected = addon_preferences.use_selected
+
+            operator = row.operator("gamerigtool.toogle_constraint", text="Unmute")
+            operator.mute = False
+            operator.use_selected = addon_preferences.use_selected
+
+            row.prop(addon_preferences, "use_selected", text="", icon="RESTRICT_SELECT_OFF")
+
+classes = [GRT_Generate_Game_Rig]
 
 
 
+
+
+def register():
+
+
+    bpy.types.VIEW3D_HT_header.append(draw_item)
+
+    for cls in classes:
+        bpy.utils.register_class(cls)
+
+
+def unregister():
+
+    bpy.types.VIEW3D_HT_header.remove(draw_item)
+
+    for cls in classes:
+        bpy.utils.unregister_class(cls)
+
+
+if __name__ == "__main__":
+    register()
