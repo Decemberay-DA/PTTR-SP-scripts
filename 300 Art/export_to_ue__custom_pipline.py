@@ -502,7 +502,7 @@ class GRT_Generate_Game_Rig:
 
     @staticmethod
     @Logging.logged_method
-    def execute(operator_presets, context):
+    def execute_generate_game_rig(operator_presets, context):
             
             GRT_Generate_Game_Rig.invoke(
                 GRT_Generate_Game_Rig.preset,
@@ -834,7 +834,7 @@ class GRT_Action_bakery:
     # this one uses only global settings from scene
     @staticmethod
     @Logging.logged_method
-    def execute(context):
+    def execute_action_backery(context):
 
         scn = context.scene
 
@@ -873,6 +873,7 @@ class GRT_Action_bakery:
 
 
                 for Baker in Action_Bakery:
+                    
                     @Logging.logged_method
                     def backery_thingy(Baker):
                         if control_rig.animation_data:
@@ -1381,14 +1382,17 @@ def run_export_pipline_for_rig(rig):
     Logging.logger.write(f"Source_Armature {rig.name}")
 
 
-    # create god damn game rig
-    GRT_Generate_Game_Rig.execute(
+    # create god damn game rig ------------------------------------------------
+    GRT_Generate_Game_Rig.execute_generate_game_rig(
         GRT_Generate_Game_Rig.preset, 
         bpy.context
     )
 
+    # add all god damn actions from control rig to game rig ------------------------------------------------
+    bpy.ops.gamerigtool.action_bakery_list_operator(operation='LOAD_ALL_ACTIONS')
+
     # bake god damn actions to game rig ------------------------------------------------
-    GRT_Action_bakery.execute(
+    GRT_Action_bakery.execute_action_backery(
         # uses scen preset
         bpy.context
     )
