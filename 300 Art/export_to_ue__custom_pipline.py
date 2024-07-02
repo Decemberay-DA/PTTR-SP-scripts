@@ -439,11 +439,23 @@ class Logging:
 # whole god damn it Game_Rig_Tools-221_B35_B36/ folder in here cz i dont give a shit on how to call operator with presets that i need)))))))0
 @final
 class GRT_Generate_Game_Rig:
+    @staticmethod
+    @Logging.logged_method
+    def get_control_rig(): 
+        return bpy.context.scene.GRT_Action_Bakery_Global_Settings.Source_Armature
+    
+    @staticmethod
+    @Logging.logged_method
+    def get_deform_rig(): 
+        return bpy.context.scene.GRT_Action_Bakery_Global_Settings.Target_Armature
+
     preset = SimpleNamespace(**{
         # additional
         "Hierarchy_Mode" : 'RIGIFY',
         "Use_Legacy" : False,
         "Use_Regenerate_Rig" : False,
+        "Game_Rig_Postfix": "_deform",
+        "Control_Rig_Postfix": "_control",
         # base from Default_-_keep_hierarchy.py
         "Extract_Mode": "DEFORM",
         "Flat_Hierarchy": True,
@@ -1111,6 +1123,16 @@ class GRT_Action_bakery:
 class BlenderEX:
     @staticmethod
     @Logging.logged_method
+    def is_object_is_mesh(obj):
+        return not (
+            obj is not None
+            and hasattr(obj, "type") 
+            and obj.type is not None 
+            and obj.type == "MESH"
+        )
+
+    @staticmethod
+    @Logging.logged_method
     def get_root_bone_of_armature(armature):
         return armature.data.edit_bones[armature.data.edit_bones.keys()[0]]
 
@@ -1146,6 +1168,7 @@ class BlenderEX:
     def parent_to_other_object(obj, target_object):
         while obj.parent:
             obj.parent = None
+            obj.parents = None
         target_object.objects.link(obj)
 
     @staticmethod
@@ -1362,14 +1385,14 @@ class Passes:
 
 
 @Logging.logged_method
-def run_export_pipline_for_rig(rig):
+def run_export_pipline_for_rig(control_rig):
 
-    original_collection_of_the_rig = rig.users_collection[0]
-    temporal_export_collection = bpy.data.collections.new(name="Export")
-    bpy.context.scene.collection.children.link(temporal_export_collection)
+    original_collection_of_control_rig = control_rig.users_collection[0]
+    temporal_export_collection_for_game_rig = bpy.data.collections.new(name="Export")
+    bpy.context.scene.collection.children.link(temporal_export_collection_for_game_rig)
 
     # add rig and its childs to the "Export" collection
-    BlenderEX.move_to_collection_with_nierarchy(rig, temporal_export_collection)
+    BlenderEX.move_to_collection_with_nierarchy(control_rig, temporal_export_collection_for_game_rig)
 
 
     # create game rig ------------------------------------------------
@@ -1378,15 +1401,17 @@ def run_export_pipline_for_rig(rig):
     gtr_action_bakery = bpy.context.scene.GRT_Action_Bakery
     Logging.logger.write(f"scn.GRT_Action_Bakery:\n{Utils.recirsive_to_string(gtr_action_bakery)}\n")
 
-    gtr_global_settings.Source_Armature = rig
-    Logging.logger.write(f"Source_Armature {rig.name}")
-
+    gtr_global_settings.Source_Armature = control_rig
+    Logging.logger.write(f"Source_Armature is set to {control_rig.name}")
 
     # create god damn game rig ------------------------------------------------
     GRT_Generate_Game_Rig.execute_generate_game_rig(
         GRT_Generate_Game_Rig.preset, 
         bpy.context
     )
+
+    game_rig = GRT_Generate_Game_Rig.get_deform_rig()
+    BlenderEX.move_to_collection_with_nierarchy(game_rig, temporal_export_collection_for_game_rig)
 
     # add all god damn actions from control rig to game rig ------------------------------------------------
     bpy.ops.gamerigtool.action_bakery_list_operator(operation='LOAD_ALL_ACTIONS')
@@ -1397,58 +1422,57 @@ def run_export_pipline_for_rig(rig):
         bpy.context
     )
 
+    # parent objects from control rig to game rig ------------------------------------------------
+    childs_meshes_first_level = control_rig.children
+
+    for child in childs_meshes_first_level:
+        Logging.logger.write(f"childs_meshes_first_level: {child.name}")
+        BlenderEX.parent_to_other_object(child, game_rig)
+
+
+    # move control rig away
+    BlenderEX.move_to_collection_with_nierarchy(control_rig, original_collection_of_control_rig)
 
 
 
-
-
-    # # processing meshes and exporting to unreal ------------------------------------------------
+    # # # processing meshes and exporting to unreal ------------------------------------------------
     # meshes = []
 
     # @Logging.logged_method_hight
     # def filter_meshes():
     #     for obj in temporal_export_collection.all_objects:
     #         # only for geometry
-    #         if not (
-    #             obj is not None
-    #             and hasattr(obj, "type") 
-    #             and obj.type is not None 
-    #             and obj.type == "MESH"
-    #         ):
+    #         if not BlenderEX.is_object_is_mesh(obj):
     #             Logging.logger.write(f"Skipped {obj.name if obj else 'deez nust'}")
     #             continue
 
     #         meshes.append(obj)
     #         Logging.logger.write(f"{obj.name}")
+
     # filter_meshes()
 
 
     # @Logging.logged_method_hight
-    # def export_rig():
-    #     for obj in meshes:
-    #         BlenderEX.force_select_object(obj)
+    # def prepare_mesh():   
+    #     BlenderEX.force_select_object(obj)
 
-    #         # Make single user and apply visual transform
-    #         bpy.ops.object.make_single_user(object=True, obdata=True)
-    #         bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    #     # Make single user and apply visual transform
+    #     bpy.ops.object.make_single_user(object=True, obdata=True)
+    #     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 
+    #     bpy.ops.object.visual_transform_apply()
+    #     Logging.logger.write(f"Made single user and applied visual transform to {obj.name}")
 
-    #         bpy.ops.object.visual_transform_apply()
-    #         Logging.logger.write(f"Made single user and applied visual transform to {obj.name}")
+    #     obj.data.name = f"{obj.name}__unique_mesh"
+    #     Logging.logger.write(f"Renamed object data to {obj.data.name}")
 
+    #     obj.select_set(False)
+    #     BlenderEX.deselect_everything()
 
-    #         fix_object_normal_pass(obj)
+    #     Logging.logger.write(f"Finished for {obj.name}")
 
-    #         # create_micro_bone_pass(obj, rig)
-            
-    #         obj.data.name = f"{obj.name}__unique_mesh"
-    #         Logging.logger.write(f"Renamed object data to {obj.data.name}")
-
-    #         obj.select_set(False)
-    #         BlenderEX.deselect_everything()
-
-    #         Logging.logger.write(f"Finished for {obj.name}")
-    # export_rig()
+    # for obj in meshes:
+    #     prepare_mesh()
 
 
 
@@ -1507,15 +1531,21 @@ def main():
     # Save the current Blender file
     bpy.ops.wm.save_mainfile()
 
+    # add debug empty object
+    bpy.ops.object.empty_add(type='PLAIN_AXES', align='WORLD', location=(0, 0, 0), scale=(1, 1, 1))
+    bpy.context.object.name = "SCENE WAS MODIFIED"
+
     Logging.logger.write("Saved the current Blender file")
 
     BlenderEX.deselect_everything()
 
     # Get the objects to export
-    rigs_to_export = [
-            # bpy.data.objects["shum_cloth_rig"],
-            bpy.data.objects["shum_control_rig"]
-        ]
+    rigs_to_export = frozenset(
+        filter(
+            lambda x: x.type == "ARMATURE",
+            bpy.data.collections.get("EXPORT").objects
+        )
+    )
 
     for rig in rigs_to_export:
         run_export_pipline_for_rig(rig)
