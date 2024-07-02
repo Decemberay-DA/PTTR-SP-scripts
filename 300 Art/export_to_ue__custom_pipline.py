@@ -217,7 +217,7 @@ class ConfigLoader:
 {
     "main": {
         "is_revert_changes": false,
-        "is_export_to_ue": false
+        "is_export_to_ue": true
     },
     "logging": {
         "is_update_view_every_logging": true,
@@ -1476,11 +1476,11 @@ def run_export_pipline_for_rig(control_rig):
 
 
 
-    # # Send to Unreal Engine all things from the "Export" collection
-    # if ConfigLoader.config.main.is_export_to_ue:
-    #     Logging.logger.write(f"Sending to Unreal started")
-    #     bpy.ops.wm.send2ue()
-    #     Logging.logger.write(f"Sending to Unreal finished")
+    # Send to Unreal Engine all things from the "Export" collection
+    if ConfigLoader.config.main.is_export_to_ue:
+        Logging.logger.write(f"Sending to Unreal started")
+        bpy.ops.wm.send2ue()
+        Logging.logger.write(f"Sending to Unreal finished")
 
     # # delete the "Export" collection
     # bpy.data.collections.remove(temporal_export_collection)
