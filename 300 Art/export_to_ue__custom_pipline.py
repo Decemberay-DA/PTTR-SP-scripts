@@ -216,11 +216,11 @@ class ConfigLoader:
     config_file_json = """
 {
     "main": {
-        "is_revert_changes": false,
+        "is_revert_changes": true,
         "is_export_to_ue": true
     },
     "logging": {
-        "is_update_view_every_logging": true,
+        "is_update_view_every_logging": false,
         "tab_size": 3,
         "this_file_name": "export_to_ue__custom_pipline.py",
         "log_file_name": "export_to_ue__custom_pipline.log",
@@ -1138,6 +1138,15 @@ class BlenderEX:
 
     @staticmethod
     @Logging.logged_method
+    def free_up_this_collection_name(name:str) -> None:
+        for collection in bpy.data.collections:
+            col_name = collection.name
+            if name == col_name:
+                collection.name = col_name + "__fried_up"
+            Logging.logger.write(collection.name)
+
+    @staticmethod
+    @Logging.logged_method
     def deselect_everything():
         bpy.ops.object.select_all(action="DESELECT")
 
@@ -1388,6 +1397,7 @@ class Passes:
 def run_export_pipline_for_rig(control_rig):
 
     original_collection_of_control_rig = control_rig.users_collection[0]
+    BlenderEX.free_up_this_collection_name(name="Export")
     temporal_export_collection_for_game_rig = bpy.data.collections.new(name="Export")
     bpy.context.scene.collection.children.link(temporal_export_collection_for_game_rig)
 
