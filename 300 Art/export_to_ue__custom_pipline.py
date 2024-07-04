@@ -1518,6 +1518,34 @@ def run_export_pipline_for_rig(control_rig):
 
 
 
+@final
+class Send2UE:
+
+    @staticmethod
+    @Logging.logged_method
+    def set_folder_names_to(context, asset_folder_name):
+        # /Game/assets/Shum/
+        path = f"/Game/assets/{asset_folder_name}/"
+
+        # unreal_mesh_folder_path
+        # unreal_animation_folder_path
+        # unreal_groom_folder_path
+        context.scene.send2ue.unreal_mesh_folder_path = path
+        context.scene.send2ue.unreal_animation_folder_path = path
+        context.scene.send2ue.unreal_groom_folder_path = path
+
+    @staticmethod
+    @Logging.logged_method
+    def load_config_for_shum(context):
+        Send2UE.set_folder_names_to(context, "Shum")
+
+    @staticmethod
+    @Logging.logged_method
+    def load_config_for_backpack(context):
+        Send2UE.set_folder_names_to(context, "Backpack")
+
+
+
 
 
 
@@ -1569,4 +1597,11 @@ def main():
 
 
 Logging.clear_log_file()
-main()
+# main()
+
+
+Send2UE.set_folder_names_to(bpy.context, "DeezNutsTest")
+
+
+
+
