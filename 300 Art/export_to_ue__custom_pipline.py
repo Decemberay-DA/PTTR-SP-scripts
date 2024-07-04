@@ -226,6 +226,12 @@ class ConfigLoader:
         "log_file_name": "export_to_ue__custom_pipline.log",
         "log_file_path": "Y://___Projects___//PTTR.SP - Patternolitsadiya Shum for portfolio//300 Art"
     },
+    "send2ue": {
+        "export_folder": {
+            "selected_asset_folder_name_variants" " 0,
+            "asset_folder_name_variants" : ["Shum", "Backpack"]
+        }
+    },
     "passes": {
         "fix_normals": {
             "enabled": true,
@@ -1260,6 +1266,7 @@ class BlenderEX:
 # passes ------------------------------------------------------------------
 @final
 class Passes:
+
     @Logging.logged_method
     @staticmethod
     def fix_object_normal_pass(obj):
@@ -1523,6 +1530,19 @@ class Send2UE:
 
     @staticmethod
     @Logging.logged_method
+    def get_selected_folder_name():
+        variants = ConfigLoader.config.send2ue.export_folder.asset_folder_name_variants
+        index = ConfigLoader.config.send2ue.export_folder.selected_asset_folder_name_variants
+        return variants[index]
+
+    @staticmethod
+    @Logging.logged_method
+    def load_needed_config(context):
+        folder_name = Send2UE.get_selected_folder_name()
+        Send2UE.set_folder_names_to(context, folder_name)
+
+    @staticmethod
+    @Logging.logged_method
     def set_folder_names_to(context, asset_folder_name):
         # /Game/assets/Shum/
         path = f"/Game/assets/{asset_folder_name}/"
@@ -1534,15 +1554,6 @@ class Send2UE:
         context.scene.send2ue.unreal_animation_folder_path = path
         context.scene.send2ue.unreal_groom_folder_path = path
 
-    @staticmethod
-    @Logging.logged_method
-    def load_config_for_shum(context):
-        Send2UE.set_folder_names_to(context, "Shum")
-
-    @staticmethod
-    @Logging.logged_method
-    def load_config_for_backpack(context):
-        Send2UE.set_folder_names_to(context, "Backpack")
 
 
 
@@ -1585,6 +1596,8 @@ def main():
         )
     )
 
+    Send2UE.load_needed_config(bpy.context)
+
     for rig in rigs_to_export:
         run_export_pipline_for_rig(rig)
 
@@ -1597,10 +1610,7 @@ def main():
 
 
 Logging.clear_log_file()
-# main()
-
-
-Send2UE.set_folder_names_to(bpy.context, "DeezNutsTest")
+main()
 
 
 
