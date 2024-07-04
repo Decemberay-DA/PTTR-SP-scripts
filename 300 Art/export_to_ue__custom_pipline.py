@@ -1123,6 +1123,7 @@ class GRT_Action_bakery:
 
 # BlenderEX.py
 class BlenderEX:
+    
     @staticmethod
     @Logging.logged_method
     def is_object_is_mesh(obj):
@@ -1175,12 +1176,20 @@ class BlenderEX:
         target_collection.objects.link(obj)
 
     @staticmethod
-    @Logging.logged_method
+    @Logging.logged_method_hight
     def parent_to_other_object(obj, target_object):
         while obj.parent:
+
             obj.parent = None
-            obj.parents = None
-        target_object.objects.link(obj)
+            Logging.logger.write(f"Parent of object {obj.name} unset")
+
+            if hasattr(obj, "parents"):
+                obj.parents = None
+                Logging.logger.write(f"Parents of object {obj.name} unset")
+
+        if hasattr(target_object, "objects"):
+            target_object.objects.link(obj)
+            Logging.logger.write(f"Parents of object {obj.name} set to {target_object.name}")
 
     @staticmethod
     @Logging.logged_method
@@ -1210,6 +1219,65 @@ class BlenderEX:
         else:
             bpy.context.view_layer.objects.active = obj
             obj.select_set(True)
+
+
+
+
+# Python: Traceback (most recent call last):
+#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_07.blend\export_to_ue__custom_pipline", line 1683, in <module>
+#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_07.blend\export_to_ue__custom_pipline", line 313, in two_lined
+#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_07.blend\export_to_ue__custom_pipline", line 1672, in main
+#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_07.blend\export_to_ue__custom_pipline", line 313, in two_lined
+#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_07.blend\export_to_ue__custom_pipline", line 1556, in run_export_pipline_for_rig
+#   File "Z:\Blender Launcher\stable\blender-3.6.4+stable.21bfc5e7fe3f\3.6\scripts\modules\bpy\ops.py", line 113, in __call__
+#     ret = _op_call(self.idname_py(), None, kw)
+# RuntimeError: Error: Python: Traceback (most recent call last):
+#   File "C:\Users\Игорь\AppData\Roaming\Blender Foundation\Blender\3.6\scripts\addons\send2ue\operators.py", line 127, in execute
+#     export.send2ue(properties)
+#   File "C:\Users\Игорь\AppData\Roaming\Blender Foundation\Blender\3.6\scripts\addons\send2ue\core\export.py", line 537, in send2ue
+#     if validation_manager.run():
+#   File "C:\Users\Игорь\AppData\Roaming\Blender Foundation\Blender\3.6\scripts\addons\send2ue\core\validations.py", line 50, in run
+#     if not validator():
+#   File "C:\Users\Игорь\AppData\Roaming\Blender Foundation\Blender\3.6\scripts\addons\send2ue\core\validations.py", line 376, in validate_object_names
+#     utilities.report_error(
+#   File "C:\Users\Игорь\AppData\Roaming\Blender Foundation\Blender\3.6\scripts\addons\send2ue\core\utilities.py", line 1142, in report_error
+#     raise RuntimeError(message + details)
+# RuntimeError: The following blender object(s) contain special characters or a white space in the name(s):
+# "z_spike_003.001","z_spike_004.001","z_spike_005.001"
+# Note: the only valid special characters are "+", "-" and "_".
+# Location: Z:\Blender Launcher\stable\blender-3.6.4+stable.21bfc5e7fe3f\3.6\scripts\modules\bpy\ops.py:113
+
+
+
+
+@final
+class ObjectParentedToBone_To_ObjectWheightedByBoneWeight:
+
+    @staticmethod
+    @Logging.logged_method
+    def execute(obj):
+        is_have_armature_modifier = Passes.has_armature_modifier(obj)
+        is_parented_to_bone = obj.parent.type == "BONE"
+
+        if is_have_armature_modifier and is_parented_to_bone:
+            # add armature midifier
+            Passes.add_armature_modifier(obj, obj.parent)
+
+            # fill with weight
+            Passes.fill_object_with_vertex_weight(obj, obj.parent.name, 1)
+
+
+
+
+
+        pass
+
+
+
+
+
+
+
 
 
 
@@ -1301,6 +1369,13 @@ class Passes:
         bpy.ops.object.mode_set(mode="OBJECT")
 
         return new_bone
+
+    @Logging.logged_method
+    @staticmethod
+    def add_armature_modifier(obj, rig):
+        mod = obj.modifiers.new(name="Armature", type='ARMATURE')
+        mod.object = rig
+
 
     @Logging.logged_method
     @staticmethod
@@ -1406,6 +1481,8 @@ def run_export_pipline_for_rig(control_rig):
         Send2UE.get_unreal_folder_name_from_object_extras(control_rig)
     )
 
+    Send2UE.rename_to_correct_name(control_rig)
+
     original_collection_of_control_rig = control_rig.users_collection[0]
     BlenderEX.free_up_this_collection_name(name="Export")
     temporal_export_collection_for_game_rig = bpy.data.collections.new(name="Export")
@@ -1442,6 +1519,46 @@ def run_export_pipline_for_rig(control_rig):
         bpy.context
     )
 
+    # make each child unique ------------------------------------------------
+    childs_j756 = control_rig.children
+    meshes = []
+
+    @Logging.logged_method_hight
+    def filter_meshes():
+        for obj in childs_j756:
+            # only for geometry
+            if not BlenderEX.is_object_is_mesh(obj):
+                Logging.logger.write(f"Skipped {obj.name if obj else 'deez nust'}")
+                continue
+
+            meshes.append(obj)
+            Logging.logger.write(f"{obj.name}")
+
+    filter_meshes()
+
+
+    @Logging.logged_method_hight
+    def prepare_mesh(obj):   
+        BlenderEX.force_select_object(obj)
+
+        bpy.ops.object.make_single_user(object=True, obdata=True)
+        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+        bpy.ops.object.visual_transform_apply()
+        Logging.logger.write(f"Uniqufication to {obj.name}")
+
+        obj.data.name = f"{obj.name}__unique_mesh"
+        Logging.logger.write(f"Renamed object data to {obj.data.name}")
+
+        obj.select_set(False)
+        BlenderEX.deselect_everything()
+
+        Logging.logger.write(f"Uniqufication is finished for {obj.name}")
+
+    for obj in meshes:
+        prepare_mesh(obj)
+
+
+
     # parent objects from control rig to game rig ------------------------------------------------
     childs_meshes_first_level = control_rig.children
 
@@ -1455,44 +1572,7 @@ def run_export_pipline_for_rig(control_rig):
 
 
 
-    # # # processing meshes and exporting to unreal ------------------------------------------------
-    # meshes = []
 
-    # @Logging.logged_method_hight
-    # def filter_meshes():
-    #     for obj in temporal_export_collection.all_objects:
-    #         # only for geometry
-    #         if not BlenderEX.is_object_is_mesh(obj):
-    #             Logging.logger.write(f"Skipped {obj.name if obj else 'deez nust'}")
-    #             continue
-
-    #         meshes.append(obj)
-    #         Logging.logger.write(f"{obj.name}")
-
-    # filter_meshes()
-
-
-    # @Logging.logged_method_hight
-    # def prepare_mesh():   
-    #     BlenderEX.force_select_object(obj)
-
-    #     # Make single user and apply visual transform
-    #     bpy.ops.object.make_single_user(object=True, obdata=True)
-    #     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-
-    #     bpy.ops.object.visual_transform_apply()
-    #     Logging.logger.write(f"Made single user and applied visual transform to {obj.name}")
-
-    #     obj.data.name = f"{obj.name}__unique_mesh"
-    #     Logging.logger.write(f"Renamed object data to {obj.data.name}")
-
-    #     obj.select_set(False)
-    #     BlenderEX.deselect_everything()
-
-    #     Logging.logger.write(f"Finished for {obj.name}")
-
-    # for obj in meshes:
-    #     prepare_mesh()
 
 
 
@@ -1531,6 +1611,12 @@ def run_export_pipline_for_rig(control_rig):
 @final
 class Send2UE:
 
+    @staticmethod
+    @Logging.logged_method
+    def rename_to_correct_name(obj):
+        name = obj.name.replace(".", "_").replace(" ", "_").replace("-", "_")
+        obj.name = name
+
     # name of the custom property
     unreal_folder_name = "unreal_folder_name"
 
@@ -1562,9 +1648,26 @@ class Send2UE:
 
 
 
+# Python: Traceback (most recent call last):
+#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_05.blend\export_to_ue__custom_pipline", line 1639, in <module>
+#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_05.blend\export_to_ue__custom_pipline", line 313, in two_lined
+#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_05.blend\export_to_ue__custom_pipline", line 1628, in main
+#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_05.blend\export_to_ue__custom_pipline", line 313, in two_lined
+#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_05.blend\export_to_ue__custom_pipline", line 1496, in run_export_pipline_for_rig
+#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_05.blend\export_to_ue__custom_pipline", line 313, in two_lined
+#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_05.blend\export_to_ue__custom_pipline", line 1189, in parent_to_other_object
+# AttributeError: 'Object' object has no attribute 'objects'
 
 
-
+# Python: Traceback (most recent call last):
+#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_04.blend\export_to_ue__custom_pipline", line 1624, in <module>
+#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_04.blend\export_to_ue__custom_pipline", line 313, in two_lined
+#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_04.blend\export_to_ue__custom_pipline", line 1613, in main
+#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_04.blend\export_to_ue__custom_pipline", line 313, in two_lined
+#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_04.blend\export_to_ue__custom_pipline", line 1490, in run_export_pipline_for_rig
+#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_04.blend\export_to_ue__custom_pipline", line 313, in two_lined
+#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_04.blend\export_to_ue__custom_pipline", line 1182, in parent_to_other_object
+# AttributeError: 'Object' object has no attribute 'parents'
 
 
 
