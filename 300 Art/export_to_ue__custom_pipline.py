@@ -227,10 +227,6 @@ class ConfigLoader:
         "log_file_path": "Y://___Projects___//PTTR.SP - Patternolitsadiya Shum for portfolio//300 Art"
     },
     "send2ue": {
-        "export_folder": {
-            "selected_asset_folder_name_variants" " 0,
-            "asset_folder_name_variants" : ["Shum", "Backpack"]
-        }
     },
     "passes": {
         "fix_normals": {
@@ -1272,6 +1268,8 @@ class Passes:
     def fix_object_normal_pass(obj):
         if ConfigLoader.config.passes.fix_normals.attribute_name not in obj.keys() or obj[ConfigLoader.config.passes.fix_normals.attribute_name] is False:
             Passes.fix_object_normals(obj)
+
+
             
     @Logging.logged_method
     @staticmethod
@@ -1403,6 +1401,11 @@ class Passes:
 @Logging.logged_method
 def run_export_pipline_for_rig(control_rig):
 
+    Send2UE.set_folder_names_to(
+        bpy.context, 
+        Send2UE.get_unreal_folder_name_from_object_extras(control_rig)
+    )
+
     original_collection_of_control_rig = control_rig.users_collection[0]
     BlenderEX.free_up_this_collection_name(name="Export")
     temporal_export_collection_for_game_rig = bpy.data.collections.new(name="Export")
@@ -1528,18 +1531,13 @@ def run_export_pipline_for_rig(control_rig):
 @final
 class Send2UE:
 
-    @staticmethod
-    @Logging.logged_method
-    def get_selected_folder_name():
-        variants = ConfigLoader.config.send2ue.export_folder.asset_folder_name_variants
-        index = ConfigLoader.config.send2ue.export_folder.selected_asset_folder_name_variants
-        return variants[index]
+    # name of the custom property
+    unreal_folder_name = "unreal_folder_name"
 
     @staticmethod
     @Logging.logged_method
-    def load_needed_config(context):
-        folder_name = Send2UE.get_selected_folder_name()
-        Send2UE.set_folder_names_to(context, folder_name)
+    def get_unreal_folder_name_from_object_extras(obj):
+        return obj[Send2UE.unreal_folder_name]
 
     @staticmethod
     @Logging.logged_method
@@ -1573,7 +1571,9 @@ class Send2UE:
 
 
 
-
+# to use it
+# change things in the config file
+# for each export rig set its property "unreal_folder_name" to the name of the folder of this asset in ue
 
 @Logging.logged_method
 def main():
@@ -1596,7 +1596,6 @@ def main():
         )
     )
 
-    Send2UE.load_needed_config(bpy.context)
 
     for rig in rigs_to_export:
         run_export_pipline_for_rig(rig)
