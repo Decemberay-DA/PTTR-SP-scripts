@@ -1223,32 +1223,6 @@ class BlenderEX:
 
 
 
-# Python: Traceback (most recent call last):
-#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_07.blend\export_to_ue__custom_pipline", line 1683, in <module>
-#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_07.blend\export_to_ue__custom_pipline", line 313, in two_lined
-#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_07.blend\export_to_ue__custom_pipline", line 1672, in main
-#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_07.blend\export_to_ue__custom_pipline", line 313, in two_lined
-#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_07.blend\export_to_ue__custom_pipline", line 1556, in run_export_pipline_for_rig
-#   File "Z:\Blender Launcher\stable\blender-3.6.4+stable.21bfc5e7fe3f\3.6\scripts\modules\bpy\ops.py", line 113, in __call__
-#     ret = _op_call(self.idname_py(), None, kw)
-# RuntimeError: Error: Python: Traceback (most recent call last):
-#   File "C:\Users\Игорь\AppData\Roaming\Blender Foundation\Blender\3.6\scripts\addons\send2ue\operators.py", line 127, in execute
-#     export.send2ue(properties)
-#   File "C:\Users\Игорь\AppData\Roaming\Blender Foundation\Blender\3.6\scripts\addons\send2ue\core\export.py", line 537, in send2ue
-#     if validation_manager.run():
-#   File "C:\Users\Игорь\AppData\Roaming\Blender Foundation\Blender\3.6\scripts\addons\send2ue\core\validations.py", line 50, in run
-#     if not validator():
-#   File "C:\Users\Игорь\AppData\Roaming\Blender Foundation\Blender\3.6\scripts\addons\send2ue\core\validations.py", line 376, in validate_object_names
-#     utilities.report_error(
-#   File "C:\Users\Игорь\AppData\Roaming\Blender Foundation\Blender\3.6\scripts\addons\send2ue\core\utilities.py", line 1142, in report_error
-#     raise RuntimeError(message + details)
-# RuntimeError: The following blender object(s) contain special characters or a white space in the name(s):
-# "z_spike_003.001","z_spike_004.001","z_spike_005.001"
-# Note: the only valid special characters are "+", "-" and "_".
-# Location: Z:\Blender Launcher\stable\blender-3.6.4+stable.21bfc5e7fe3f\3.6\scripts\modules\bpy\ops.py:113
-
-
-
 
 @final
 class ObjectParentedToBone_To_ObjectWheightedByBoneWeight:
@@ -1512,6 +1486,7 @@ def run_export_pipline_for_rig(control_rig):
 
     # add all god damn actions from control rig to game rig ------------------------------------------------
     bpy.ops.gamerigtool.action_bakery_list_operator(operation='LOAD_ALL_ACTIONS')
+    # bpy.ops.gamerigtool.action_bakery_list_operator(operation='LOAD_ACTIVE_ACTIONS') # dont exports what i want os scrue it
 
     # bake god damn actions to game rig ------------------------------------------------
     GRT_Action_bakery.execute_action_backery(
@@ -1642,32 +1617,6 @@ class Send2UE:
 
 
 
-
-
-
-
-
-
-# Python: Traceback (most recent call last):
-#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_05.blend\export_to_ue__custom_pipline", line 1639, in <module>
-#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_05.blend\export_to_ue__custom_pipline", line 313, in two_lined
-#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_05.blend\export_to_ue__custom_pipline", line 1628, in main
-#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_05.blend\export_to_ue__custom_pipline", line 313, in two_lined
-#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_05.blend\export_to_ue__custom_pipline", line 1496, in run_export_pipline_for_rig
-#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_05.blend\export_to_ue__custom_pipline", line 313, in two_lined
-#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_05.blend\export_to_ue__custom_pipline", line 1189, in parent_to_other_object
-# AttributeError: 'Object' object has no attribute 'objects'
-
-
-# Python: Traceback (most recent call last):
-#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_04.blend\export_to_ue__custom_pipline", line 1624, in <module>
-#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_04.blend\export_to_ue__custom_pipline", line 313, in two_lined
-#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_04.blend\export_to_ue__custom_pipline", line 1613, in main
-#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_04.blend\export_to_ue__custom_pipline", line 313, in two_lined
-#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_04.blend\export_to_ue__custom_pipline", line 1490, in run_export_pipline_for_rig
-#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_04.blend\export_to_ue__custom_pipline", line 313, in two_lined
-#   File "Y:\___Projects___\PTTR.SP - Patternolitsadiya Shum for portfolio\300 Art\Shum_01_pythoning_04.blend\export_to_ue__custom_pipline", line 1182, in parent_to_other_object
-# AttributeError: 'Object' object has no attribute 'parents'
 
 
 
